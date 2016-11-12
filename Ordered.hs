@@ -86,8 +86,7 @@ class Lin (repr :: Nat -> [Maybe Nat] -> [Maybe Nat] -> * -> *) where
        => (OrdVar repr vid a -> repr (S vid) hi' ho' b)
        -> repr vid hi ho (a :->> b)
 
-  llam :: (End hi (Just vid) hi', End ho Nothing ho')
-       => (LinVar repr vid a -> repr (S vid) hi' ho' b)
+  llam :: (LinVar repr vid a -> repr (S vid) (Just vid ': hi)  (Nothing ': ho) b)
        -> repr vid hi ho (a :-<> b)
 
   lam :: (RegVar repr a -> repr vid hi ho b)
