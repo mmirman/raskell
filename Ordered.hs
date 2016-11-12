@@ -11,7 +11,8 @@
   TypeFamilies,
   TypeOperators,
   UndecidableInstances,
-  OverlappingInstances
+  OverlappingInstances,
+  AllowAmbiguousTypes
  #-}
 
 module Ordered where
@@ -51,7 +52,13 @@ class End (l :: [Maybe Nat]) (v :: Maybe Nat) (l' :: [Maybe Nat]) | l v -> l'
 instance End '[] a (a ': '[])
 instance End a v2 b => End (v ': a) v2 (v ': b)
 
+class Start (l :: [Maybe Nat]) (v :: Maybe Nat) (l' :: [Maybe Nat]) | l v -> l'
+instance Start l v (v ': l)
 
+class Concat (a :: [Maybe Nat]) (b :: [Maybe Nat]) (c :: [Maybe Nat]) | a b -> c, c a -> b
+instance Concat '[] b b
+instance Concat a b c => Concat (h ': a) b (h ': c)
+                    
 
 type OrdVar repr (vid::Nat) a = forall (v::Nat) (i::[Maybe Nat]) (o::[Maybe Nat]). (ConsumeOrd vid i o) => repr v i o a
 type LinVar repr (vid::Nat) a = forall (v::Nat) (i::[Maybe Nat]) (o::[Maybe Nat]). (ConsumeLin vid i o) => repr v i o a
@@ -79,6 +86,8 @@ instance Arrow (:-<>) where
   {-# INLINE unArrow #-}
   unArrow = unLolli
 
+newtype a :<>: b = Together { unTogether :: (a,b) }
+
 class Lin (repr :: Nat -> [Maybe Nat] -> [Maybe Nat] -> * -> *) where
   slam :: (OrdVar repr vid a -> repr (S vid) (Just vid ': hi) (Nothing ': ho) b)
        -> repr vid hi ho (a :>-> b)
@@ -87,14 +96,34 @@ class Lin (repr :: Nat -> [Maybe Nat] -> [Maybe Nat] -> * -> *) where
        => (OrdVar repr vid a -> repr (S vid) hi' ho' b)
        -> repr vid hi ho (a :->> b)
 
+
+  useTogether :: (Concat hi1 hi2 hi,
+                  Concat ho1 ho2 ho,
+
+                  End hi1 (Just vid) hi1',
+                  End ho1 Nothing ho1',
+                  
+                  Start hi2 (Just (S vid)) hi2',
+                  Start ho2 Nothing ho2',
+
+                  Concat hi1' hi2' hi'',
+                  Concat ho1' ho2' ho''
+                  )
+              => repr vid hi' hi (a :<>: b)
+              -> (OrdVar repr vid a -> OrdVar repr (S vid) b -> repr (S (S vid)) hi'' ho'' c)
+              -> repr vid hi' ho c
+
+  
+
   llam :: (LinVar repr vid a -> repr (S vid) (Just vid ': hi)  (Nothing ': ho) b)
        -> repr vid hi ho (a :-<> b)
 
   lam :: (RegVar repr a -> repr vid hi ho b)
-      -> repr vid hi ho (a -> b)                    
+      -> repr vid hi ho (a -> b)
 
   -- polymorphism could be good, could be bad.  Who's to say?
   ($$) :: Arrow t => repr vid hi h (t a b) -> repr vid h ho a -> repr vid hi ho b  
+
 
 
 newtype R (vid::Nat) (hi::[Maybe Nat]) (ho::[Maybe Nat]) a = R { unR :: a }
@@ -104,13 +133,16 @@ instance Lin R where
     slam f = R $ SLolli $ \x -> unR $ f $ R x
     llam f = R $ Lolli $ \x -> unR $ f $ R x
     lam f = R $ \x -> unR $ f $ R x
+
+    useTogether tog f = let (x,y) = unTogether $ unR tog in R $ unR $ f (R x) (R y)
+    
     {-# INLINE ($$) #-}    
     f $$ x = R $ unArrow (unR f) (unR x)
     
 eval :: R Z '[] '[] a -> a
 eval = unR
 
-good = eval $ llam $ \r -> slam $ \f -> slam $ \x -> x $$ f $$ r
+good = eval $ llam $ \r -> slam $ \f -> slam $ \x -> (\a b -> b $$ a) f x $$ r
 
 main = do
   -- putStrLn $ unLolli (eval $ good <^> llam (\x -> x)) "I was passed to a real function."
