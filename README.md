@@ -1,4 +1,3 @@
-
 Raskell:  Imperative Haskell with Linear Concurrency
 ====================================================
 

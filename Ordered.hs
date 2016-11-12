@@ -34,7 +34,8 @@ instance (b ~ False) => EQ x y b
 class ConsumeOrd (v::Nat) (i::[Maybe Nat]) (o::[Maybe Nat]) | v i -> o
 class ConsumeOrdHelper (b::Bool) (v::Nat) (x::Nat) (i::[Maybe Nat]) (o::[Maybe Nat]) | b v x i -> o
 instance (ConsumeOrd v i o) => ConsumeOrd v (Nothing ': i) (Nothing ': o)
-instance ConsumeOrd x (Just x ': i) (Nothing ': i)
+-- so this was easy, just remove the possibility of continuing if there's anything in the context we don't like.
+instance ConsumeOrd x (Just x ': i) (Nothing ': i) 
 
 
 
@@ -92,6 +93,7 @@ class Lin (repr :: Nat -> [Maybe Nat] -> [Maybe Nat] -> * -> *) where
   lam :: (RegVar repr a -> repr vid hi ho b)
       -> repr vid hi ho (a -> b)                    
 
+  -- polymorphism could be good, could be bad.  Who's to say?
   ($$) :: Arrow t => repr vid hi h (t a b) -> repr vid h ho a -> repr vid hi ho b  
 
 
@@ -108,7 +110,7 @@ instance Lin R where
 eval :: R Z '[] '[] a -> a
 eval = unR
 
-good = eval $ slam $ \f -> slam $ \x -> x $$ f
+good = eval $ llam $ \r -> slam $ \f -> slam $ \x -> x $$ f $$ r
 
 main = do
   -- putStrLn $ unLolli (eval $ good <^> llam (\x -> x)) "I was passed to a real function."
