@@ -11,8 +11,8 @@
   TypeFamilies,
   TypeOperators,
   UndecidableInstances,
-  OverlappingInstances,
-  AllowAmbiguousTypes
+  AllowAmbiguousTypes,
+  GADTs
  #-}
 
 module Ordered where
@@ -26,8 +26,9 @@ data Nat = Z | S Nat
 --
 
 class EQ (x::Nat) (y::Nat) (b::Bool) | x y -> b
-instance EQ x x True
-instance (b ~ False) => EQ x y b
+instance {-# OVERLAPPABLE #-} (b ~ False) => EQ x y b
+instance {-# OVERLAPPING #-} EQ x x True
+
 
 --
 -- Type level machinery for consuming a variable in a list of variables.
@@ -88,7 +89,7 @@ instance Arrow (:-<>) where
 
 newtype a :<>: b = Together { unTogether :: (a,b) }
 
-class Lin (repr :: Nat -> [Maybe Nat] -> [Maybe Nat] -> * -> *) where
+class OrdNat (repr :: Nat -> [Maybe Nat] -> [Maybe Nat] -> * -> *) where
   slam :: (OrdVar repr vid a -> repr (S vid) (Just vid ': hi) (Nothing ': ho) b)
        -> repr vid hi ho (a :>-> b)
           
@@ -128,7 +129,7 @@ class Lin (repr :: Nat -> [Maybe Nat] -> [Maybe Nat] -> * -> *) where
 
 newtype R (vid::Nat) (hi::[Maybe Nat]) (ho::[Maybe Nat]) a = R { unR :: a }
 
-instance Lin R where
+instance OrdNat R where
     elam f = R $ ELolli $ \x -> unR $ f $ R x
     slam f = R $ SLolli $ \x -> unR $ f $ R x
     llam f = R $ Lolli $ \x -> unR $ f $ R x
