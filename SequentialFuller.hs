@@ -137,12 +137,6 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
          -> (OrdVar repr x b -> repr vid hi2 ho2 z c)
          -> repr vid hi ho2 z c
 
-  -- this can use linear variables, but if they are ordered, it ensures that they come correctly identified.
-  sendL'' :: (forall v . repr v hi hi2 w a)
-          -> (forall v . repr v hi2 ho x (a :>-> b))
-          -> (OrdVar repr x b -> repr vid hi2 ho2 z c)
-          -> repr vid hi ho2 z c            
-
   llam :: (LinVar repr vid a -> repr (S vid) (Lin vid : hi)  (None : ho) x b)
        -> repr vid hi ho x (a :-<> b)
           
@@ -153,15 +147,6 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
 eval :: R Z '[] '[] chan a -> a
 eval = unR
 
-tm = eval $ sR $ \y -> sR $ \z -> sL' z y (\f -> f)
-tm1 = eval $ sR $ \y -> sR $ \z -> sendL' z y (\f -> f)
-
-tm2 = eval $ llam $ \y -> llam $ \z -> sendL' y z (\f -> f)
--- tm2' = eval $ llam $ \y -> llam $ \z -> sL' y z (\f -> f) -- DOESN'T COMPILE because sL' only works with actual ordered chanels
-
--- tm3 = eval $ lam $ \y -> lam $ \z -> sendL' y z (\f -> f) -- DOESN'T COMPILE because sendL' only works with ordered or linear chanels
-
-tm3 = eval $ lam $ \y -> lam $ \z -> sendL'' y z (\f -> f)
 
 
 newtype R (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = R { unR :: a }
@@ -188,6 +173,12 @@ instance OrdSeq R where
 . |- y <- rec x; z <- rec x; send y z ;  y <-> x :: x :  (A ->> B) ->> (A ->> B)
 -}
 
+tm = eval $ sR $ \y -> sR $ \z -> sL' z y (\f -> f)
+tm1 = eval $ sR $ \y -> sR $ \z -> sendL' z y (\f -> f)
+tm2 = eval $ llam $ \y -> llam $ \z -> sendL' y z (\f -> f)
+-- tm2' = eval $ llam $ \y -> llam $ \z -> sL' y z (\f -> f) -- DOESN'T COMPILE because sL' only works with actual ordered chanels
+
+tm3 = eval $ lam $ \y -> lam $ \z -> sendL' y z (\f -> f)
 
 
 main = do
