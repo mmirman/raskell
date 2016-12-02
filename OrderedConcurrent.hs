@@ -105,24 +105,23 @@ type LinVar repr vid a = forall (v::Nat) (i::[Cont]) (o::[Cont]) . ConsumeLin vi
 type RegVar repr vid a = forall (v::Nat) (i::[Cont]) (o::[Cont]) . ConsumeReg vid i o => repr v i o vid a
 
 class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
-  forward :: (forall v . repr v hi ho y a)
-          -> repr vid hi ho x a
-
-  sR :: (OrdVar repr vid a -> repr (S vid) (Om vid:hi) (None:ho) x b)
-     -> repr vid hi ho x (a :>-> b)
+  
+  sRecv :: (OrdVar repr vid a -> repr (S vid) (Om vid:hi) (None:ho) x b)
+        -> repr vid hi ho x (a :>-> b)
 
   -- this can use linear variables, but if they are ordered, it ensures that they come correctly identified.
-  sendL :: (forall v . repr v hi hi2 w a)  -- How?  ordered variables can only be used in concert by nature of them.
-         -> (forall v . repr v hi2 ho x (a :>-> b))
-         -> (OrdVar repr x b -> repr vid hi2 ho2 z c)
-         -> repr vid hi ho2 z c
+  sSend :: (forall v . repr v hi hi2 w a)  -- How?  ordered variables can only be used in concert by nature of them.
+        -> (forall v . repr v hi2 ho x (a :>-> b))
+        -> (OrdVar repr x b -> repr vid hi2 ho2 z c)
+        -> repr vid hi ho2 z c
 
-  llam :: (LinVar repr vid a -> repr (S vid) (Lin vid:hi)  (None:ho) x b)
+  lRecv :: (LinVar repr vid a -> repr (S vid) (Lin vid:hi)  (None:ho) x b)
        -> repr vid hi ho x (a :-<> b)
           
-  lam :: (RegVar repr vid a -> repr (S vid) (Reg vid:hi) (Reg vid:ho) x b)
+  recv :: (RegVar repr vid a -> repr (S vid) (Reg vid:hi) (Reg vid:ho) x b)
       -> repr vid hi ho x (a -> b)
   
+
 
 
 
@@ -132,20 +131,21 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
 newtype R (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = R { unR :: a }
 
 instance OrdSeq R where
-  forward x = R $ unR x
-  sR f = R $ SLolli $ \x -> unR $ f $ R x
-  llam f = R $ LLolli $ \x -> unR $ f $ R x
   
-  sendL vWa vXf procQ = R $ unR $ procQ $ R $ (unSLolli $ unR vXf) $ unR vWa
+  sRecv f = R $ SLolli $ \x -> unR $ f $ R x
+  lRecv f = R $ LLolli $ \x -> unR $ f $ R x
+  recv f = R $ \x -> unR $ f $ R x
+  
+  sSend vWa vXf procQ = R $ unR $ procQ $ R $ (unSLolli $ unR vXf) $ unR vWa
 
-  lam f = R $ \x -> unR $ f $ R x
+
   
 evalR :: R Z '[] '[] chan a -> a
 evalR = unR
 
-tm = evalR $ sR $ \y -> sR $ \z -> sendL z y (\f -> f)
-tm2 = evalR $ llam $ \y -> llam $ \z -> sendL y z (\f -> f)
-tm3 = evalR $ lam $ \y -> lam $ \z -> sendL y z (\f -> f)
+tm = evalR $ sRecv $ \y -> sRecv $ \z -> sSend z y (\f -> f)
+tm2 = evalR $ lRecv $ \y -> lRecv $ \z -> sSend y z (\f -> f)
+tm3 = evalR $ recv $ \y -> recv $ \z -> sSend y z (\f -> f)
 
 
 
