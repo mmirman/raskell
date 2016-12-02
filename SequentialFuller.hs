@@ -177,7 +177,6 @@ tm = eval $ sR $ \y -> sR $ \z -> sL' z y (\f -> f)
 tm1 = eval $ sR $ \y -> sR $ \z -> sendL' z y (\f -> f)
 tm2 = eval $ llam $ \y -> llam $ \z -> sendL' y z (\f -> f)
 -- tm2' = eval $ llam $ \y -> llam $ \z -> sL' y z (\f -> f) -- DOESN'T COMPILE because sL' only works with actual ordered chanels
-
 tm3 = eval $ lam $ \y -> lam $ \z -> sendL' y z (\f -> f)
 
 
