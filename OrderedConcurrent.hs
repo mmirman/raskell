@@ -13,7 +13,8 @@
   AllowAmbiguousTypes,
   GADTs,
   InstanceSigs,
-  ScopedTypeVariables
+  ScopedTypeVariables,
+  GeneralizedNewtypeDeriving
  #-}
 
 module OrderedConcurrent where
@@ -105,43 +106,70 @@ type LinVar repr vid a = forall (v::Nat) (i::[Cont]) (o::[Cont]) . ConsumeLin vi
 type RegVar repr vid a = forall (v::Nat) (i::[Cont]) (o::[Cont]) . ConsumeReg vid i o => repr v i o vid a
 
 class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
+  type Name repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *
   
-  sRecv :: (OrdVar repr vid a -> repr (S vid) (Om vid:hi) (None:ho) x b)
-        -> repr vid hi ho x (a :>-> b)
-
-  sSend :: (forall v . repr v hi hi2 w a) -- This can use non-ordered variables, but if they are ordered,
-        -> (forall v . repr v hi2 ho x (a :>-> b)) -- it ensures that they are in fact ordered, as they come with a type constraint ensuring they are used this way.
+  sSend :: (forall v . Name repr v hi hi2 w a) -- This can use non-ordered variables, but if they are ordered,
+        -> (forall v . Name repr v hi2 ho x (a :>-> b)) -- it ensures that they are in fact ordered, as they come with a type constraint ensuring they are used this way.
         -- The abstraction reuses "x" so we don't need to increment the depth counter.
-        -> (OrdVar repr x b -> repr vid hi2 ho2 z c) -- "ho2" is used instead of "ho" in the abstraction because it might use more variables from further up the scope.
+        -> (OrdVar (Name repr) x b -> repr vid hi2 ho2 z c) -- "ho2" is used instead of "ho" in the abstraction because it might use more variables from further up the scope.
         -> repr vid hi ho2 z c
+           
+  sRecv :: (OrdVar (Name repr) y a -> repr (S y) (Om y:hi) (None:ho) x b)
+        -> repr y hi ho x (a :>-> b)
 
-  lRecv :: (LinVar repr vid a -> repr (S vid) (Lin vid:hi)  (None:ho) x b)
+  lRecv :: (LinVar (Name repr) vid a -> repr (S vid) (Lin vid:hi)  (None:ho) x b)
        -> repr vid hi ho x (a :-<> b)
           
-  recv :: (RegVar repr vid a -> repr (S vid) (Reg vid:hi) (Reg vid:ho) x b)
+  recv :: (RegVar (Name repr) vid a -> repr (S vid) (Reg vid:hi) (Reg vid:ho) x b)
       -> repr vid hi ho x (a -> b)
 
-          
-newtype C (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = C { unC :: IO a }
 
-instance OrdSeq IOR where
-  sRecv f = IOR $ SLolli $ \x -> unR $ f $ R x
+newtype ImpChan n = ImpChan { imp :: forall b. Channel n b }
 
-  {-
-     new f = Nu <$> newChan >>= f
-     a ||| b = forkIO a >> fork b
-     inn (Nu x) f = readChan x >>= fork . f
-     out (Nu x) y b = writeChan x y >> b
-     rep = forever
-     nil = return ()
-     embed = id
+newtype Channel (n::Nat) a = Channel { getChannel :: Chan (a,ImpChan n) }
+
+newtype C (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = C { unC :: Channel x a -> IO () }
+
+instance OrdSeq C where
+  
+  type Name C = C
+  -- sRecv f = R $ SLolli $ \x -> unR $ f $ R x
+  sRecv (f :: OrdVar C y a -> C (S y) (Om y:hi) (None:ho) x b) = C $ \(cx :: Channel x (a :>-> b)) -> do
+    (fab,cx2) :: (a :>-> b, ImpChan x) <- readChan $ getChannel cx
+    
+    let pXB :: Channel x b -> IO ()
+        pXB = unC $ f $ C $ \(cy :: Channel y a) -> do
+          (a :: a,cy2 :: ImpChan y) <- readChan $ getChannel cy
+          let b = unSLolli fab a
+          writeChan (getChannel $ imp cx2) (b, cx2)
+    pXB $ imp cx2
+
+{-
+newtype N (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = N { unN :: IO a } deriving (Applicative, Functor, Monad)
+newtype Nu f (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x::Nat) a = Nu { nu :: f (Nu f vid hi ho x a) }
+instance OrdSeq N where
+  type Name N = Nu Chan
+
+  sRecv (f :: OrdVar (Nu Chan) y a -> N (S y) (Om y:hi) (None:ho) x b) = N $ do
+    
+    undefined
 -}
 
+{-
+newtype N (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = N { unN :: IO () }
+newtype Nu f (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x::Nat) a = Nu { nu :: f (Nu f vid hi ho x a) }
+instance OrdSeq N where
+  type Name N = Nu Chan
+
+  sRecv (f :: OrdVar C y a -> C (S y) (Om y:hi) (None:ho) x b) = C $ \cx@(Channel cX) -> do
+    undefined
+
+-}
   
 
 
 
-
+{-
 
 
 
@@ -167,6 +195,6 @@ tm = evalR $ sRecv $ \y -> sRecv $ \z -> sSend z y (\f -> f)
 tm2 = evalR $ lRecv $ \y -> lRecv $ \z -> sSend y z (\f -> f)
 tm3 = evalR $ recv $ \y -> recv $ \z -> sSend y z (\f -> f)
 
-
+-}
 
 
