@@ -141,62 +141,11 @@ instance OrdSeq C where
     forkIO $ cab_io cab
     writeChan cab $ SLolli (cb, ca_io)
 
-{-    
-    
+evalC :: C Z '[] '[] chan a -> a -> IO ()
+evalC e a = do
+  c <- newChan
+  forkIO $ unC e c
+  writeChan c a
 
-
-
-
-newtype N (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = N { unN :: IO a } deriving (Applicative, Functor, Monad)
-newtype Nu f (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x::Nat) a = Nu { nu :: f (Nu f vid hi ho x a) }
-instance OrdSeq N where
-  type Name N = Nu Chan
-
-  sRecv (f :: OrdVar (Nu Chan) y a -> N (S y) (Om y:hi) (None:ho) x b) = N $ do
-    
-    undefined
--}
-
-{-
-newtype N (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = N { unN :: IO () }
-newtype Nu f (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x::Nat) a = Nu { nu :: f (Nu f vid hi ho x a) }
-instance OrdSeq N where
-  type Name N = Nu Chan
-
-  sRecv (f :: OrdVar C y a -> C (S y) (Om y:hi) (None:ho) x b) = C $ \cx@(Channel cX) -> do
-    undefined
-
--}
-  
-
-
-
-{-
-
-
-
-
-
-
-newtype R (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = R { unR :: a }
-
-instance OrdSeq R where
-  
-  sRecv f = R $ SLolli $ \x -> unR $ f $ R x
-  lRecv f = R $ LLolli $ \x -> unR $ f $ R x
-  recv f = R $ \x -> unR $ f $ R x
-  
-  sSend vWa vXf procQ = R $ unR $ procQ $ R $ (unSLolli $ unR vXf) $ unR vWa
-
-
-  
-evalR :: R Z '[] '[] chan a -> a
-evalR = unR
-
-tm = evalR $ sRecv $ \y -> sRecv $ \z -> sSend z y (\f -> f)
-tm2 = evalR $ lRecv $ \y -> lRecv $ \z -> sSend y z (\f -> f)
-tm3 = evalR $ recv $ \y -> recv $ \z -> sSend y z (\f -> f)
-
--}
-
-
+tm :: (a :>-> b) :>-> (a :>-> b) -> IO ()
+tm = evalC $ sRecv $ \y -> sRecv $ \z -> sSend z y id
