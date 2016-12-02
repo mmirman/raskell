@@ -32,15 +32,19 @@ instance {-# OVERLAPPABLE #-} (b ~ False) => EQ x y b
 instance {-# OVERLAPPING #-} EQ x x True
 
 
+
+class UseTwo (v::Nat) (i::[Maybe Nat]) (o::[Maybe Nat]) | v i -> o
+instance (UseTwo v i o) => UseTwo v (Nothing : Nothing : i) (Nothing : Nothing : o)
+instance UseTwo x (Just (S x) : Just x : i) (Nothing : Nothing : i)
+
+
+
 --
 -- Type level machinery for consuming a variable in a list of variables.
 --
 class ConsumeOrd (v::Nat) (i::[Maybe Nat]) (o::[Maybe Nat]) | v i -> o
-class ConsumeOrdHelper (b::Bool) (v::Nat) (x::Nat) (i::[Maybe Nat]) (o::[Maybe Nat]) | b v x i -> o
 instance (ConsumeOrd v i o) => ConsumeOrd v (Nothing : i) (Nothing : o)
--- so this was easy, just remove the possibility of continuing if there's anything in the context we don't like.
 instance ConsumeOrd x (Just x : i) (Nothing : i) 
-
 
 
 class ConsumeLin (v::Nat) (i::[Maybe Nat]) (o::[Maybe Nat]) | v i -> o
@@ -58,12 +62,9 @@ instance End a v2 b => End (v : a) v2 (v : b)
 class Start (l :: [Maybe Nat]) (v :: Maybe Nat) (l' :: [Maybe Nat]) | l v -> l'
 instance Start l v (v ': l)
 
-class Concat (a :: [Maybe Nat]) (b :: [Maybe Nat]) (c :: [Maybe Nat]) -- | a b -> c, c a -> b
+class Concat (a :: [Maybe Nat]) (b :: [Maybe Nat]) (c :: [Maybe Nat]) | a b -> c, c a -> b
 instance Concat '[] b b
 instance Concat a b c => Concat (h : a) b (h : c)
-                    
-
-newtype OrdVar repr (vid::Nat) a = OrdVar { unOrdVar :: forall (v::Nat) (i::[Maybe Nat]) (o::[Maybe Nat]) . (ConsumeOrd vid i o) => repr v i o  a }
 
 newtype a :>-> b = SLolli {unSLolli :: a -> b}
 newtype a :->> b = ELolli {unELolli :: a -> b}
@@ -71,108 +72,56 @@ newtype a :<>: b = Together { unTogether :: (a,b) }
 
 data Phant (h :: [Maybe Nat]) = Phant
 
-class OrdSeq (repr :: Nat -> [Maybe Nat] -> [Maybe Nat] -> * -> *) where
+type OrdVar repr vid a = forall (v::Nat) (i::[Maybe Nat]) (o::[Maybe Nat]) . (ConsumeOrd vid i o) => repr v i o vid a 
+
+class OrdSeq (repr :: Nat -> [Maybe Nat] -> [Maybe Nat] -> Nat -> * -> *) where
+  forward :: (forall v . repr v hi ho y a)
+          -> repr vid hi ho x a
+  
+  sR :: (OrdVar repr vid a -> repr (S vid) (Just vid ': hi) (Nothing ': ho) x b)
+     -> repr vid hi ho x (a :>-> b)
 
 
-  sL' :: forall hi ho hi' hi'' ho' ho'' hiU hoU vid a b c hi2.
-          (Concat hi' (Just vid : hi'') hiU, -- hiU = hi',v,hi''
-           Concat ho' (Nothing  : ho'') hoU, -- hoU = ho',N,ho''
-
-           Concat hi' (Just vid : Just (S vid) : hi'') hi, -- hi = hi',v,v',hi''
-           Concat ho' (Nothing  : Nothing : ho'') ho -- ho = ho',N,N,ho''
-
-          , ConsumeOrd vid hi hi2
-          , ConsumeOrd (S vid) hi2 ho
-          )      
-      => Phant hi2
-      -> Phant hi'
-      -> Phant ho'
-      -> Phant hi''
-      -> Phant ho''      
-      -> (OrdVar repr vid b -> repr (S (S vid)) hiU hoU c)
-      -> (forall v hi . (ConsumeOrd vid hi hi2) => repr v hi hi2 a)
-      -> (forall v ho . (ConsumeOrd (S vid) hi2 ho) => repr v hi2 ho (a :>-> b))
-      -> repr (S (S vid)) hi ho c
-          
-  eR :: (End hi (Just vid) hi', End ho Nothing ho')
-     => (OrdVar repr vid a -> repr (S vid) hi' ho' b)
-     -> repr vid hi ho (a :->> b)
-          
-  sR :: (OrdVar repr vid a -> repr (S vid) (Just vid : hi) (Nothing : ho) b)
-       -> repr vid hi ho (a :>-> b)
-
-  eL' ::  forall hi ho hi' hi'' ho' ho'' hiU hoU hi2 vid a b c .
-          (Concat hi' (Just vid : hi'') hiU, -- hiU = hi',v,hi''
-           Concat ho' (Nothing  : ho'') hoU, -- hoU = ho',N,ho''
-
-           Concat hi' (Just vid : Just (S vid) : hi'') hi, -- hi = hi',v,v',hi''
-           Concat ho' (Nothing  : Nothing : ho'') ho, -- ho = ho',N,N,ho''
-
-           ConsumeOrd vid hi hi2,
-           ConsumeOrd (S vid) hi2 ho
-          )      
-      => (OrdVar repr vid b -> repr (S (S vid)) hiU hoU c)
-      -> repr vid hi hi2 (a :->> b) -> repr (S vid) hi2 ho a -> repr (S (S vid)) hi ho c
+  sL' :: ( UseTwo x hi ho
+         , ConsumeOrd w hi hi2
+         , ConsumeOrd x hi2 ho
+         )
+      => (forall v . repr v hi hi2 w a)
+      -> (forall v . repr v hi2 ho x (a :>-> b)) -- this necessarily uses only a single variable 
+      -> ((forall v i o . ConsumeOrd x i o => repr v i o x b) -> repr vid hi2 ho2 z c)
+      -> repr vid hi ho2 z c
 
 
-newtype R (vid::Nat) (hi::[Maybe Nat]) (ho::[Maybe Nat]) a = R { unR :: a }
-
-var :: b -> OrdVar R vid b
-var a = OrdVar $ R a
-
-term :: ConsumeOrd vid i o => OrdVar repr vid a -> repr v i o a
-term var = unOrdVar var
-
-instance OrdSeq R where
-    sR f = R $ SLolli $ \x -> unR $ f $ OrdVar $ R x
-    eR f = R $ ELolli $ \x -> unR $ f $ OrdVar $ R x
-{-
-    eL' (procQ :: OrdVar R vid b -> R (S (S vid)) hiU hoU z c) (vXf :: forall x . R vid hi hi2 x (a :->> b)) (vWa :: forall w . R (S vid) hi2 ho w a) =
-      R $ unR $ procQ $ var $ (((unELolli $ unR $ (vXf :: R vid hi hi2 w (a :->> b))
-                              ) $ unR (vWa :: R (S vid) hi2 ho w a)
-                             ) :: b) -}
-    eL' procQ vXf vWa = R $ unR $ procQ $ var $ (unELolli $ unR vXf) $ unR vWa
-
-    sL' :: forall hi ho hi' hi'' ho' ho'' hiU hoU vid a b c hi2.
-          (Concat hi' (Just vid : hi'') hiU, -- hiU = hi',v,hi''
-           Concat ho' (Nothing  : ho'') hoU, -- hoU = ho',N,ho''
-
-           Concat hi' (Just vid : Just (S vid) : hi'') hi, -- hi = hi',v,v',hi''
-           Concat ho' (Nothing  : Nothing : ho'') ho -- ho = ho',N,N,ho''
-
-          , ConsumeOrd vid hi hi2
-          , ConsumeOrd (S vid) hi2 ho
-          )      
-      => Phant hi2
-      -> Phant hi'
-      -> Phant ho'
-      -> Phant hi''
-      -> Phant ho''            
-      -> (OrdVar R vid b -> R (S (S vid)) hiU hoU c)
-      -> (forall v hi . (ConsumeOrd vid hi hi2) => R v hi hi2 a)
-      -> (forall v ho . (ConsumeOrd (S vid) hi2 ho) => R v hi2 ho (a :>-> b))
-      -> R (S (S vid)) hi ho c
-    sL' _ _ _ _ _ procQ vWa vXf =
-      R $ unR $ procQ $ var $ (unSLolli $ unR vXf) $ unR (vWa :: R vid hi hi2 a)
-
-eval :: R Z '[] '[] a -> a
+eval :: R Z '[] '[] Z a -> a
 eval = unR
 
+tm = eval $ sR $ \y -> sR $ \z -> sL' z y (\f -> forward f)
+
+
+newtype R (vid::Nat) (hi::[Maybe Nat]) (ho::[Maybe Nat]) (x :: Nat) a = R { unR :: a }
+
+instance OrdSeq R where
+  forward v = R $ unR $ v
+  sR f = R $ SLolli $ \x -> unR $ f $ R x
+  sL' vWa vXf procQ = R $ unR $ procQ $ R $ (unSLolli $ unR vXf) $ unR vWa
+     
+
+
+
 {-
-
-                ------------------------ Id
-                   x : B |- Q :: z : B
-   -------------------------------------------------- sL*
-       w: A, x : A >-> B |- (send x w ; Q) :: z : B
----------------------------------------------------------------  sR
-     x : A >-> B |- (w ← recv z ; send x w ; Q)  :: z : A >-> B
------------------------------------------------------------------------------  sR
-|- (x ← recv z ; (w ← recv z ; (send x w ; Q))  :: z : (A >-> B) >-> (A >-> B)
-
+       y : B |- y <-> x :: x : B
+ --------------------------------------------------
+   y : A ->> B, z : A |- send y z ; y <-> x :: x : B
+-------------------------------------------------------------
+  y : A ->> B |- z <- rec x; send y z ; y <-> x :: x :  A ->> B
+-------------------------------------------------------------------------------
+. |- y <- rec x; z <- rec x; send y z ;  y <-> x :: x :  (A ->> B) ->> (A ->> B)
 -}
---good = eval $ sR $ \x -> sR $ \w -> sL' (\f -> undefined) (term x) (term w)
+
+
 
 main = do
   -- putStrLn $ unLolli (eval $ good <^> llam (\x -> x)) "I was passed to a real function."
   putStrLn "ok"
+
 
