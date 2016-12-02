@@ -95,56 +95,58 @@ class Concat (a :: [Cont]) (b :: [Cont]) (c :: [Cont]) | a b -> c, c a -> b
 instance Concat '[] b b
 instance Concat a b c => Concat (h:a) b (h:c)
 
-newtype a :>-> b = SLolli {unSLolli :: a -> b}
-newtype a :->> b = ELolli {unELolli :: a -> b}
-newtype a :-<> b = LLolli {unLLolli :: a -> b}
-newtype a :<>: b = Together { unTogether :: (a,b) }
 
 
 type OrdVar repr vid a = forall (v::Nat) (i::[Cont]) (o::[Cont]) . ConsumeOrd vid i o => repr v i o vid a 
 type LinVar repr vid a = forall (v::Nat) (i::[Cont]) (o::[Cont]) . ConsumeLin vid i o => repr v i o vid a
 type RegVar repr vid a = forall (v::Nat) (i::[Cont]) (o::[Cont]) . ConsumeReg vid i o => repr v i o vid a
 
+
+newtype a :->> b = ELolli {unELolli :: Chan (a, Chan b) }
+newtype a :-<> b = LLolli {unLLolli :: Chan (a, Chan b) }  
+newtype a :->  b = Lolli  {unLolli  :: Chan (a, Chan b) }
+
 class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
   type Name repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *
-  
-  sSend :: (forall v . Name repr v hi hi2 w a) -- This can use non-ordered variables, but if they are ordered,
-        -> (forall v . Name repr v hi2 ho x (a :>-> b)) -- it ensures that they are in fact ordered, as they come with a type constraint ensuring they are used this way.
-        -- The abstraction reuses "x" so we don't need to increment the depth counter.
-        -> (OrdVar (Name repr) x b -> repr vid hi2 ho2 z c) -- "ho2" is used instead of "ho" in the abstraction because it might use more variables from further up the scope.
-        -> repr vid hi ho2 z c
-           
-  sRecv :: (OrdVar (Name repr) y a -> repr (S y) (Om y:hi) (None:ho) x b)
-        -> repr y hi ho x (a :>-> b)
 
   lRecv :: (LinVar (Name repr) vid a -> repr (S vid) (Lin vid:hi)  (None:ho) x b)
        -> repr vid hi ho x (a :-<> b)
           
   recv :: (RegVar (Name repr) vid a -> repr (S vid) (Reg vid:hi) (Reg vid:ho) x b)
-      -> repr vid hi ho x (a -> b)
+      -> repr vid hi ho x (a :-> b)
+          
+  sSend :: (forall v . Name repr v hi hi2 w a) -- This can use non-ordered variables, but if they are ordered,
+        -> (forall v . Name repr v hi2 ho x (a :>-> b)) -- it ensures that they are in fact ordered, as they come with a type constraint ensuring they are used this way.
+        -- The abstraction reuses "x" so we don't need to increment the depth counter.
+        -> (OrdVar (Name repr) x b -> repr vid hi2 ho2 z c) -- "ho2" is used instead of "ho" in the abstraction because it might use more variables from further up the scope.
+        -> repr vid hi ho2 z c
 
+  sRecv :: (OrdVar (Name repr) y a -> repr (S y) (Om y:hi) (None:ho) x b)
+        -> repr y hi ho x (a :>-> b)
 
-newtype ImpChan n = ImpChan { imp :: forall b. Channel n b }
+newtype C (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = C { unC :: Chan a -> IO () }
 
-newtype Channel (n::Nat) a = Channel { getChannel :: Chan (a,ImpChan n) }
-
-newtype C (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = C { unC :: Channel x a -> IO () }
+newtype a :>-> b = SLolli {unSLolli :: (Chan b , Chan a -> IO ()) }
 
 instance OrdSeq C where
   
   type Name C = C
-  -- sRecv f = R $ SLolli $ \x -> unR $ f $ R x
-  sRecv (f :: OrdVar C y a -> C (S y) (Om y:hi) (None:ho) x b) = C $ \(cx :: Channel x (a :>-> b)) -> do
-    (fab,cx2) :: (a :>-> b, ImpChan x) <- readChan $ getChannel cx
-    
-    let pXB :: Channel x b -> IO ()
-        pXB = unC $ f $ C $ \(cy :: Channel y a) -> do
-          (a :: a,cy2 :: ImpChan y) <- readChan $ getChannel cy
-          let b = unSLolli fab a
-          writeChan (getChannel $ imp cx2) (b, cx2)
-    pXB $ imp cx2
 
-{-
+  sRecv (f :: OrdVar C y a -> C (S y) (Om y:hi) (None:ho) x b) = C $ \cxab -> do
+    (cb,ca_io) <- unSLolli <$> readChan cxab
+    (unC $ f $ C ca_io) cb
+
+  sSend (C ca_io) (C cab_io) procB_C = C $ unC $ procB_C $ C $ \cb -> do
+    cab <- newChan
+    forkIO $ cab_io cab
+    writeChan cab $ SLolli (cb, ca_io)
+
+{-    
+    
+
+
+
+
 newtype N (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = N { unN :: IO a } deriving (Applicative, Functor, Monad)
 newtype Nu f (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x::Nat) a = Nu { nu :: f (Nu f vid hi ho x a) }
 instance OrdSeq N where
