@@ -109,14 +109,10 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
   sRecv :: (OrdVar repr vid a -> repr (S vid) (Om vid:hi) (None:ho) x b)
         -> repr vid hi ho x (a :>-> b)
 
-  -- this can use non-ordered variables, but if they are ordered,
-  -- it ensures that they are in fact ordered,
-  -- as they come with a type constraint ensuring they are used this way.
-  sSend :: (forall v . repr v hi hi2 w a)
-        -> (forall v . repr v hi2 ho x (a :>-> b))
-        -- The abstraction reuses x so we don't need to increment
-        -- the depth counter.   
-        -> (OrdVar repr x b -> repr vid hi2 ho2 z c)  
+  sSend :: (forall v . repr v hi hi2 w a) -- This can use non-ordered variables, but if they are ordered,
+        -> (forall v . repr v hi2 ho x (a :>-> b)) -- it ensures that they are in fact ordered, as they come with a type constraint ensuring they are used this way.
+        -- The abstraction reuses "x" so we don't need to increment the depth counter.
+        -> (OrdVar repr x b -> repr vid hi2 ho2 z c) -- "ho2" is used instead of "ho" in the abstraction because it might use more variables from further up the scope.
         -> repr vid hi ho2 z c
 
   lRecv :: (LinVar repr vid a -> repr (S vid) (Lin vid:hi)  (None:ho) x b)
@@ -128,8 +124,8 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
           
 newtype C (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = C { unC :: IO a }
 
---instance OrdSeq IOR where
---  sRecv f = IOR $ SLolli $ \x -> unR $ f $ R x
+instance OrdSeq IOR where
+  sRecv f = IOR $ SLolli $ \x -> unR $ f $ R x
 
   {-
      new f = Nu <$> newChan >>= f
