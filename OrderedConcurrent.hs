@@ -109,10 +109,14 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
   sRecv :: (OrdVar repr vid a -> repr (S vid) (Om vid:hi) (None:ho) x b)
         -> repr vid hi ho x (a :>-> b)
 
-  -- this can use linear variables, but if they are ordered, it ensures that they come correctly identified.
-  sSend :: (forall v . repr v hi hi2 w a)  -- How?  ordered variables can only be used in concert by nature of them.
+  -- this can use non-ordered variables, but if they are ordered,
+  -- it ensures that they are in fact ordered,
+  -- as they come with a type constraint ensuring they are used this way.
+  sSend :: (forall v . repr v hi hi2 w a)
         -> (forall v . repr v hi2 ho x (a :>-> b))
-        -> (OrdVar repr x b -> repr vid hi2 ho2 z c)
+        -- The abstraction reuses x so we don't need to increment
+        -- the depth counter.   
+        -> (OrdVar repr x b -> repr vid hi2 ho2 z c)  
         -> repr vid hi ho2 z c
 
   lRecv :: (LinVar repr vid a -> repr (S vid) (Lin vid:hi)  (None:ho) x b)
@@ -120,7 +124,27 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
           
   recv :: (RegVar repr vid a -> repr (S vid) (Reg vid:hi) (Reg vid:ho) x b)
       -> repr vid hi ho x (a -> b)
+
+          
+newtype C (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = C { unC :: IO a }
+
+--instance OrdSeq IOR where
+--  sRecv f = IOR $ SLolli $ \x -> unR $ f $ R x
+
+  {-
+     new f = Nu <$> newChan >>= f
+     a ||| b = forkIO a >> fork b
+     inn (Nu x) f = readChan x >>= fork . f
+     out (Nu x) y b = writeChan x y >> b
+     rep = forever
+     nil = return ()
+     embed = id
+-}
+
   
+
+
+
 
 
 
