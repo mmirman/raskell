@@ -63,7 +63,7 @@ instance Concat a b c => Concat (h ': a) b (h ': c)
 
 type OrdVar repr (vid::Nat) a = forall (v::Nat) (i::[Maybe Nat]) (o::[Maybe Nat]). (ConsumeOrd vid i o) => repr v i o a
 type LinVar repr (vid::Nat) a = forall (v::Nat) (i::[Maybe Nat]) (o::[Maybe Nat]). (ConsumeLin vid i o) => repr v i o a
-type RegVar repr a = forall (v::Nat) (i::[Maybe Nat]) (o::[Maybe Nat]). repr v i o a
+type RegVar repr a = forall (v::Nat) (i::[Maybe Nat]) . repr v i i a
 
 class Arrow (t :: * -> * -> *) where
   unArrow :: t a b -> (a -> b)

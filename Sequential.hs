@@ -68,43 +68,71 @@ instance Concat a b c => Concat (h : a) b (h : c)
 
 newtype a :>-> b = SLolli {unSLolli :: a -> b}
 newtype a :->> b = ELolli {unELolli :: a -> b}
+newtype a :-<> b = LLolli {unLLolli :: a -> b}
 newtype a :<>: b = Together { unTogether :: (a,b) }
 
 data Phant (h :: [Maybe Nat]) = Phant
 
 type OrdVar repr vid a = forall (v::Nat) (i::[Maybe Nat]) (o::[Maybe Nat]) . (ConsumeOrd vid i o) => repr v i o vid a 
+type LinVar repr vid a = forall (v::Nat) (i::[Maybe Nat]) (o::[Maybe Nat]). (ConsumeLin vid i o) => repr v i o vid a
+type RegVar repr (vid :: Nat) a = forall (v::Nat) (i::[Maybe Nat]) (c::Nat) . repr v i i vid a
 
 class OrdSeq (repr :: Nat -> [Maybe Nat] -> [Maybe Nat] -> Nat -> * -> *) where
   forward :: (forall v . repr v hi ho y a)
           -> repr vid hi ho x a
-  
-  sR :: (OrdVar repr vid a -> repr (S vid) (Just vid ': hi) (Nothing ': ho) x b)
+
+  sR :: (OrdVar repr vid a -> repr (S vid) (Just vid : hi) (Nothing : ho) x b)
      -> repr vid hi ho x (a :>-> b)
 
 
+  -- this necessarily can only use ordered variables.  But shouldn't we be able to use non ordered variables also?
   sL' :: ( UseTwo x hi ho
-         , ConsumeOrd w hi hi2
-         , ConsumeOrd x hi2 ho
-         )
-      => (forall v . repr v hi hi2 w a)
+         , ConsumeOrd (S x) hi hi2  -- these enforce that life is ordered.
+         , ConsumeOrd x hi2 ho 
+         ) 
+      => (forall v . repr v hi hi2 (S x) a)  -- S x == w
       -> (forall v . repr v hi2 ho x (a :>-> b)) -- this necessarily uses only a single variable 
-      -> ((forall v i o . ConsumeOrd x i o => repr v i o x b) -> repr vid hi2 ho2 z c)
+      -> (OrdVar repr x b -> repr vid hi2 ho2 z c)
       -> repr vid hi ho2 z c
 
+  -- this can use non ordered variables, but if they are ordered, it ensures that they come correctly identified.
+  sendL' :: (forall v . repr v hi hi2 w a)
+         -> (forall v . repr v hi2 ho x (a :>-> b))
+         -> (OrdVar repr x b -> repr vid hi2 ho2 z c)
+         -> repr vid hi ho2 z c
+            
+  llam :: (LinVar repr vid a -> repr (S vid) (Just vid : hi)  (Nothing : ho) x b)
+       -> repr vid hi ho x (a :-<> b)
+          
+  lam :: (RegVar repr vid a -> repr (S vid) hi ho x b)
+      -> repr vid hi ho x (a -> b)
 
-eval :: R Z '[] '[] Z a -> a
+  
+eval :: R Z '[Nothing] '[Nothing] chan a -> a
 eval = unR
 
-tm = eval $ sR $ \y -> sR $ \z -> sL' z y (\f -> forward f)
+tm = eval $ sR $ \y -> sR $ \z -> sL' z y (\f -> f)
+tm1 = eval $ sR $ \y -> sR $ \z -> sendL' z y (\f -> f)
+
+tm2 = eval $ llam $ \y -> llam $ \z -> sendL' y z (\f -> f)
+-- tm2' = eval $ llam $ \y -> llam $ \z -> sL' y z (\f -> f) -- DOESN'T COMPILE because sL' only works with actual ordered chanels
+
+-- tm3 = eval $ lam $ \y -> lam $ \z -> sendL' y z (\f -> f) -- DOESN'T COMPILE because sendL' only works with ordered or linear chanels
+
+-- tm3 = eval $ lam $ \y -> lam $ \z -> sendL' y z (\f -> f) -- DOESN'T COMPILE because sendL' only works with ordered or linear chanels
 
 
 newtype R (vid::Nat) (hi::[Maybe Nat]) (ho::[Maybe Nat]) (x :: Nat) a = R { unR :: a }
 
 instance OrdSeq R where
-  forward v = R $ unR $ v
+  forward x = R $ unR x
   sR f = R $ SLolli $ \x -> unR $ f $ R x
+  llam f = R $ LLolli $ \x -> unR $ f $ R x
+  
   sL' vWa vXf procQ = R $ unR $ procQ $ R $ (unSLolli $ unR vXf) $ unR vWa
-     
+  sendL' vWa vXf procQ = R $ unR $ procQ $ R $ (unSLolli $ unR vXf) $ unR vWa
+
+  lam f = R $ \x -> unR $ f $ R x  
 
 
 
