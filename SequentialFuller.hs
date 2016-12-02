@@ -1,4 +1,3 @@
--- /show
 {-# LANGUAGE
   DataKinds,
   FlexibleContexts,
@@ -17,7 +16,8 @@
   ScopedTypeVariables
  #-}
 
-module Ordered where
+module SequentialFuller where
+
 --
 -- Type level Nats
 --
@@ -29,7 +29,6 @@ data Cont = Lin Nat | Om Nat | Reg Nat | None
 --
 -- Type level Nat equality
 --
-
 class EQ (x::Nat) (y::Nat) (b::Bool) | x y -> b
 instance {-# OVERLAPPABLE #-} (b ~ False) => EQ x y b
 instance {-# OVERLAPPING #-} EQ x x True
@@ -159,10 +158,8 @@ instance OrdSeq R where
   sL' vWa vXf procQ = R $ unR $ procQ $ R $ (unSLolli $ unR vXf) $ unR vWa
   sendL' vWa vXf procQ = R $ unR $ procQ $ R $ (unSLolli $ unR vXf) $ unR vWa
 
-  lam f = R $ \x -> unR $ f $ R x  
-
-
-
+  lam f = R $ \x -> unR $ f $ R x
+  
 {-
        y : B |- y <-> x :: x : B
  --------------------------------------------------
@@ -172,11 +169,12 @@ instance OrdSeq R where
 -------------------------------------------------------------------------------
 . |- y <- rec x; z <- rec x; send y z ;  y <-> x :: x :  (A ->> B) ->> (A ->> B)
 -}
+tm = eval $ sR $ \y -> sR $ \z -> sendL' z y id  -- sL' z y (\f -> f)
 
-tm = eval $ sR $ \y -> sR $ \z -> sL' z y (\f -> f)
+
 tm1 = eval $ sR $ \y -> sR $ \z -> sendL' z y (\f -> f)
 tm2 = eval $ llam $ \y -> llam $ \z -> sendL' y z (\f -> f)
--- tm2' = eval $ llam $ \y -> llam $ \z -> sL' y z (\f -> f) -- DOESN'T COMPILE because sL' only works with actual ordered chanels
+-- tm2' = eval $ llam $ \y -> llam $ \z -> sL' y z (\f -> f) -- DOESN'T COMPILE because sL' only works with actual ordered channels
 tm3 = eval $ lam $ \y -> lam $ \z -> sendL' y z (\f -> f)
 
 
