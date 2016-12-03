@@ -190,6 +190,7 @@ instance OrdSeq C where
     (cb,ca_io) <- unLLolli <$> readChan cab
     (unC $ f $ C ca_io) cb
 
+  -- do we want concurrency here?  je pense
   lSend (C ca_io) (C cab_io) procB_C = C $ unC $ procB_C $ C $ \cb -> do
     cab <- newChan
     forkIO $ cab_io cab
