@@ -206,6 +206,17 @@ newtype a :-<> b = LLolli {unLLolli :: (Chan a, Chan b) }
 newtype a :->  b = Lolli  {unLolli  :: (Chan a, Chan b) }
 
 
+instance Functor (C v hi ho x) where
+  -- yes this typechecks, but I'm not sure it is meaningful.
+  fmap f (C ca_io) = C $ \(Ch cb) -> do
+    ca <- newChan
+    forkIO $ do
+      al <- getChanContents ca
+      writeList2Chan cb $ f <$> al
+    ca_io $ Ch ca
+
+    
+  
 instance OrdSeq C where
   type Name C = Ch
 
