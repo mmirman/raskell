@@ -177,7 +177,25 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
 instance OrdSeq C where
   type Name C = C
 
-  sRecv (f :: OrdVar C y a -> C (S y) (Om y:hi) (None:ho) x b) = C $ \cab -> do
+  recv f = C $ \cab -> do
+    (cb,ca_io) <- unLolli <$> readChan cab
+    (unC $ f $ C ca_io) cb
+
+  send (C ca_io) (C cab_io) procB_C = C $ unC $ procB_C $ C $ \cb -> do
+    cab <- newChan
+    cab_io cab
+    writeChan cab $ Lolli (cb, ca_io)
+
+  lRecv f = C $ \cab -> do
+    (cb,ca_io) <- unLLolli <$> readChan cab
+    (unC $ f $ C ca_io) cb
+
+  lSend (C ca_io) (C cab_io) procB_C = C $ unC $ procB_C $ C $ \cb -> do
+    cab <- newChan
+    forkIO $ cab_io cab
+    writeChan cab $ LLolli (cb, ca_io)
+
+  sRecv f = C $ \cab -> do
     (cb,ca_io) <- unSLolli <$> readChan cab
     (unC $ f $ C ca_io) cb
 
@@ -185,6 +203,15 @@ instance OrdSeq C where
     cab <- newChan
     forkIO $ cab_io cab
     writeChan cab $ SLolli (cb, ca_io)
+
+  eRecv f = C $ \cab -> do
+    (cb,ca_io) <- unELolli <$> readChan cab
+    (unC $ f $ C ca_io) cb
+
+  eSend (C cab_io) (C ca_io) procB_C = C $ unC $ procB_C $ C $ \cb -> do
+    cab <- newChan
+    forkIO $ cab_io cab
+    writeChan cab $ ELolli (cb, ca_io)
 
 
     
