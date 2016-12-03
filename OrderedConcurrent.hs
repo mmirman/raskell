@@ -152,8 +152,8 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
          , PartCtx hi1 (Om vid:hi3) hi13
          , PartCtx ho1 (None:ho3) ho13           
          )
-       => repr vid hi2 ho2 x a
-       -> (OrdVar (Name repr) x a -> repr (S vid) hi13 ho13 z c)
+       => repr vid hi2 ho2 vid a  -- we use vid here to ensure the newness of "x"
+       -> (OrdVar (Name repr) vid a -> repr (S vid) hi13 ho13 z c)
        -> repr vid hi ho z c 
 
   -- no concurrency introduced
@@ -199,6 +199,8 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
 
 instance OrdSeq C where
   type Name C = C
+
+  par (C pa) qa_c = C $ unC $ qa_c $ C $ \ca -> void $ forkIO $ pa ca
 
   recv f = C $ \cab -> do
     (cb,ca_io) <- unLolli <$> readChan cab
