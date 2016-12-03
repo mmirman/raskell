@@ -22,6 +22,8 @@ module OrderedConcurrent where
 import Control.Applicative
 import Control.Concurrent
 
+void x = x >> return ()
+
 --
 -- Type level Nats
 --
@@ -129,16 +131,16 @@ instance (EQ x y False, NotOrd l x) => NotOrd (Lin y:l) x
 instance (EQ x y False, NotOrd l x) => NotOrd (Reg y:l) x
 
 
-type OrdVar repr vid a = forall (v::Nat) (i::[Cont]) (o::[Cont]) . ConsumeOrd vid i o => repr v i o vid a 
-type LinVar repr vid a = forall (v::Nat) (i::[Cont]) (o::[Cont]) . ConsumeLin vid i o => repr v i o vid a
-type RegVar repr vid a = forall (v::Nat) (i::[Cont]) (o::[Cont]) . ConsumeReg vid i o => repr v i o vid a
+type OrdVar repr vid a = forall (i::[Cont]) (o::[Cont]) . ConsumeOrd vid i o => repr i o vid a 
+type LinVar repr vid a = forall (i::[Cont]) (o::[Cont]) . ConsumeLin vid i o => repr i o vid a
+type RegVar repr vid a = forall (i::[Cont]) (o::[Cont]) . ConsumeReg vid i o => repr i o vid a
 
 
 
 class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
-  type Name repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *
+  type Name repr :: [Cont] -> [Cont] -> Nat -> * -> *
 
-  forward :: (forall v . Name repr v i o x a)
+  forward :: Name repr i o x a
           -> repr v i o y a
 
   par :: ( PartCtx hi1 hi'  hi
@@ -155,8 +157,8 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
        -> repr vid hi ho z c 
 
   -- no concurrency introduced
-  send :: (forall v . Name repr v hi hi w a) -- no context modifications at all ensures regularity
-       -> (forall v . Name repr v hi hi x (a :-> b))
+  send :: Name repr hi hi w a -- no context modifications at all ensures regularity
+       -> Name repr hi hi x (a :-> b)
        -> (RegVar (Name repr) x b -> repr vid hi ho z c)
        -> repr vid hi ho z c
           
@@ -166,8 +168,8 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
 
           
   lSend :: (NotOrd hi w, NotOrd hi x)
-        => (forall v . Name repr v hi hi2 w a)
-        -> (forall v . Name repr v hi2 ho x (a :-<> b))
+        => Name repr hi hi2 w a
+        -> Name repr hi2 ho x (a :-<> b)
         -> (LinVar (Name repr) x b -> repr vid hi2 ho2 z c)
         -> repr vid hi ho2 z c
            
@@ -175,8 +177,8 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
        -> repr vid hi ho x (a :-<> b)
 
           
-  sSend :: (forall v . Name repr v hi hi2 w a) -- This can use non-ordered variables, but if they are ordered,
-        -> (forall v . Name repr v hi2 ho x (a :>-> b)) -- it ensures that they are in fact ordered, as they come with a type constraint ensuring they are used this way.
+  sSend :: Name repr hi hi2 w a -- This can use non-ordered variables, but if they are ordered,
+        -> Name repr hi2 ho x (a :>-> b) -- it ensures that they are in fact ordered, as they come with a type constraint ensuring they are used this way.
         -- The abstraction reuses "x" so we don't need to increment the depth counter.
         -> (OrdVar (Name repr) x b -> repr vid hi2 ho2 z c) -- "ho2" is used instead of "ho" in the abstraction because it might use more variables from further up the scope.
         -> repr vid hi ho2 z c
@@ -185,8 +187,8 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
         -> repr y hi ho x (a :>-> b)
            
   eSend :: ConsumeOrdAsLin w hi ho2    -- this case is strange as we need to make sure we eat w in ho2 since we never see w there
-        => (forall v . Name repr v hi hi2 x (a :->> b))
-        -> (forall v . Name repr v hi2 ho w a)
+        => Name repr hi hi2 x (a :->> b)
+        -> Name repr hi2 ho w a
         -> (OrdVar (Name repr) x b -> repr vid hi ho2 z c)
         -> repr vid hi ho2 z c         
 
@@ -195,8 +197,8 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
         -> repr y hi ho x (a :->> b)
 
 
-newtype Ch (v :: Nat) (hi::[Cont]) (ho::[Cont]) (x::Nat) a = Ch { unCh :: Chan a }
-newtype C (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = C { unC :: (forall vid hi ho . Ch vid hi ho x a) -> IO () }
+newtype Ch (hi::[Cont]) (ho::[Cont]) (x::Nat) a = Ch { unCh :: Chan a }
+newtype C (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = C { unC :: (forall hi ho . Ch hi ho x a) -> IO () }
 
 newtype a :>-> b = SLolli {unSLolli :: (Chan a, Chan b) }
 newtype a :->> b = ELolli {unELolli :: (Chan a, Chan b) }
@@ -204,9 +206,17 @@ newtype a :-<> b = LLolli {unLLolli :: (Chan a, Chan b) }
 newtype a :->  b = Lolli  {unLolli  :: (Chan a, Chan b) }
 
 
-
 instance OrdSeq C where
   type Name C = Ch
+
+  forward (Ch y) = C $ \(Ch x) -> do
+    putStrLn "forwarding here?"
+
+    xl <- getChanContents x
+    forkIO $ writeList2Chan y xl
+    return ()
+    
+  
   {-
 
   par (C pa) qa_c = C $ \cC -> do  --unC $ qa_c $ C $ \ca -> void $ forkIO $ pa ca
@@ -261,7 +271,7 @@ instance OrdSeq C where
     unC (procB_C $ Ch cb) cc
 
 
-{-    
+
 
 evalC :: C Z '[] '[] chan a -> a -> IO ()
 evalC e a = do
@@ -270,22 +280,20 @@ evalC e a = do
   unC e $ Ch c
 
 --tm :: (a :>-> b) :>-> (a :>-> b) -> IO ()
-tm = evalC $ sRecv $ \y -> sRecv $ \z -> sSend z y (\f -> f)
+tm = evalC $ sRecv $ \y -> sRecv $ \z -> sSend z y forward
 
 
 tm2 :: b :>-> b -> IO ()
-tm2 = evalC $ sRecv id
+tm2 = evalC $ sRecv forward
 
-void x = x >> return ()
+
 
 main = do
   a <- newChan
-  -- this doesn't block
-  tm2 $ SLolli (a, const $ putStrLn "ho")
-
   b <- newChan
-  -- this blocks. 
-  tm $ SLolli (b, const $ putStrLn "hi")
+  tm2 $ SLolli (a, b)
+  tm $ SLolli (a, b)
 
 
--}
+
+
