@@ -109,6 +109,16 @@ class End (l :: [Cont]) (v :: Cont) (l' :: [Cont]) | l v -> l'
 instance End '[] a (a:'[])
 instance End a v2 b => End (v:a) v2 (v:b)
 
+-- PartCtx is a bit like concat, but regular variables must be treated differently
+class PartCtx (a :: [Cont]) (b :: [Cont]) (c :: [Cont]) | a b -> c, c a -> b
+instance PartCtx '[] b b
+instance PartCtx a b c => PartCtx (Om h:a) b (Om h:c)
+instance PartCtx a b c => PartCtx (Lin h:a) b (Lin h:c)
+instance PartCtx a b c => PartCtx (Reg h:a) b (Reg h:c)
+instance PartCtx a b c => PartCtx (Reg h:a) (Reg h:b) (Reg h:c)
+
+
+
 
 class NotOrd (l :: [Cont]) (n :: Nat)
 instance NotOrd (Lin x:l) x
@@ -132,6 +142,19 @@ newtype a :->  b = Lolli  {unLolli  :: (Chan b , Chan a -> IO ()) }
 
 class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
   type Name repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *
+
+  par :: ( PartCtx hi1 hi'  hi
+         , PartCtx ho1 ho'  ho
+           
+         , PartCtx hi2 hi3 hi'
+         , PartCtx ho2 ho3 ho'
+           
+         , PartCtx hi1 (Om vid:hi3) hi13
+         , PartCtx ho1 (None:ho3) ho13           
+         )
+       => repr vid hi2 ho2 x a
+       -> (OrdVar (Name repr) x a -> repr (S vid) hi13 ho13 z c)
+       -> repr vid hi ho z c 
 
   -- no concurrency introduced
   send :: (forall v . Name repr v hi hi w a) -- no context modifications at all ensures regularity
