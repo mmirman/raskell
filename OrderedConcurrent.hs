@@ -183,8 +183,8 @@ instance OrdSeq C where
 
   send (C ca_io) (C cab_io) procB_C = C $ unC $ procB_C $ C $ \cb -> do
     cab <- newChan
+    writeChan cab $ Lolli (cb, ca_io)    
     cab_io cab
-    writeChan cab $ Lolli (cb, ca_io)
 
   lRecv f = C $ \cab -> do
     (cb,ca_io) <- unLLolli <$> readChan cab
