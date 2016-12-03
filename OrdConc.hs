@@ -143,19 +143,6 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
   forward :: Name repr i o x a
           -> repr v i o y a
 
-  par :: ( PartCtx hi1 hi'  hi
-         , PartCtx ho1 ho'  ho
-           
-         , PartCtx hi2 hi3 hi'
-         , PartCtx ho2 ho3 ho'
-           
-         , PartCtx hi1 (Om vid:hi3) hi13
-         , PartCtx ho1 (None:ho3) ho13           
-         )
-       => repr vid hi2 ho2 vid a  -- we use vid here to ensure the newness of "x"
-       -> (OrdVar (Name repr) vid a -> repr (S vid) hi13 ho13 z c)
-       -> repr vid hi ho z c 
-
   -- no concurrency introduced
   send :: Name repr hi hi w a -- no context modifications at all ensures regularity
        -> Name repr hi hi x (a :-> b)
@@ -196,7 +183,20 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
         => (OrdVar (Name repr) y a -> repr (S y) hi' ho' x b)
         -> repr y hi ho x (a :->> b)
 
+  par :: ( PartCtx hi1 hi'  hi
+         , PartCtx ho1 ho'  ho
+           
+         , PartCtx hi2 hi3 hi'
+         , PartCtx ho2 ho3 ho'
+           
+         , PartCtx hi1 (Om vid:hi3) hi13
+         , PartCtx ho1 (None:ho3) ho13           
+         )
+       => repr vid hi2 ho2 vid a  -- we use vid here to ensure the newness of "x"
+       -> (OrdVar (Name repr) vid a -> repr (S vid) hi13 ho13 z c)
+       -> repr vid hi ho z c
 
+       
 newtype Ch (hi::[Cont]) (ho::[Cont]) (x::Nat) a = Ch { unCh :: Chan a }
 newtype C (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = C { unC :: (forall hi ho . Ch hi ho x a) -> IO () }
 
@@ -210,40 +210,29 @@ instance OrdSeq C where
   type Name C = Ch
 
   forward (Ch y) = C $ \(Ch x) -> do
-    putStrLn "forwarding here?"
-
     xl <- getChanContents x
     forkIO $ writeList2Chan y xl
     return ()
-    
   
-  {-
+  par (C pa) qa_c = C $ \cc -> do
+    cw <- newChan
+    forkIO $ (unC $ qa_c $ Ch cw) cc
+    pa $ Ch cw
 
-  par (C pa) qa_c = C $ \cC -> do  --unC $ qa_c $ C $ \ca -> void $ forkIO $ pa ca
-    cW <- newChan
-    void $ forkIO $ pa cW
-    let pc = unC $ qa_c $ C $ \ca -> do
-          -- almost forwards ca cW
-          la <- getChanContents ca
-          forkIO $ forM_ la $ \a -> do
-            writeChan cW a
-          return ()
-    void $ forkIO $ pc cC 
-  -}
 
   sRecv f = C $ \cab -> do
     (ca,cb) <- unSLolli <$> readChan (unCh cab)
-    (unC $ f $ Ch ca) (Ch cb)
-
+    unC (f $ Ch ca) $ Ch cb
+    
   sSend ca cab procB_C = C $ \cc -> do
     cb <- newChan
-    forkIO $ unC (procB_C $ Ch cb) cc
     writeChan (unCh cab) $ SLolli (unCh ca, cb)
+    unC (procB_C $ Ch cb) cc
 
 
   eRecv f = C $ \cab -> do
     (ca,cb) <- unELolli <$> readChan (unCh cab)
-    (unC $ f $ Ch ca) (Ch cb)
+    unC (f $ Ch ca) $ Ch cb
 
   eSend cab ca procB_C = C $ \cc -> do
     cb <- newChan
@@ -253,7 +242,7 @@ instance OrdSeq C where
 
   lRecv f = C $ \cab -> do
     (ca,cb) <- unLLolli <$> readChan (unCh cab)
-    (unC $ f $ Ch ca) (Ch cb)
+    unC (f $ Ch ca) $ Ch cb
 
   lSend ca cab procB_C = C $ \cc -> do
     cb <- newChan
@@ -263,14 +252,12 @@ instance OrdSeq C where
 
   recv f = C $ \cab -> do
     (ca,cb) <- unLolli <$> readChan (unCh cab)
-    (unC $ f $ Ch ca) (Ch cb)
+    unC (f $ Ch ca) $ Ch cb
 
   send ca cab procB_C = C $ \cc -> do
     cb <- newChan
     writeChan (unCh cab) $ Lolli (unCh ca, cb)        
     unC (procB_C $ Ch cb) cc
-
-
 
 
 evalC :: C Z '[] '[] chan a -> a -> IO ()
@@ -279,21 +266,14 @@ evalC e a = do
   writeChan c a  
   unC e $ Ch c
 
---tm :: (a :>-> b) :>-> (a :>-> b) -> IO ()
+tm :: (a :>-> b) :>-> (a :>-> b) -> IO ()
 tm = evalC $ sRecv $ \y -> sRecv $ \z -> sSend z y forward
-
 
 tm2 :: b :>-> b -> IO ()
 tm2 = evalC $ sRecv forward
-
-
 
 main = do
   a <- newChan
   b <- newChan
   tm2 $ SLolli (a, b)
   tm $ SLolli (a, b)
-
-
-
-
