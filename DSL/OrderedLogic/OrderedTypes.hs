@@ -1,25 +1,8 @@
-{-# LANGUAGE
-  DataKinds,
-  FlexibleContexts,
-  FlexibleInstances,
-  FunctionalDependencies,
-  KindSignatures,
-  MultiParamTypeClasses,
-  NoMonomorphismRestriction,
-  RankNTypes,
-  TypeFamilies,
-  TypeOperators,
-  UndecidableInstances,
-  AllowAmbiguousTypes,
-  GADTs,
-  InstanceSigs,
-  ScopedTypeVariables,
-  GeneralizedNewtypeDeriving
- #-}
 module DSL.OrderedLogic.OrderedTypes where
 
 import Control.Applicative
 import Control.Concurrent
+
 
 void x = x >> return ()
 
@@ -138,48 +121,53 @@ type RegVar repr vid a = forall (i::[Cont]) (o::[Cont]) . ConsumeReg vid i o => 
 class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
   type Name repr :: [Cont] -> [Cont] -> Nat -> * -> *
 
+  type SLolli repr :: * -> * -> *
+  type ELolli repr :: * -> * -> *
+  type LLolli repr :: * -> * -> *
+  type Lolli  repr :: * -> * -> *
+
   forward :: Name repr i o x a
           -> repr v i o y a
 
   -- no concurrency introduced
   send :: Name repr hi hi w a -- no context modifications at all ensures regularity
-       -> Name repr hi hi x (a :-> b)
+       -> Name repr hi hi x (Lolli repr a b)
        -> (RegVar (Name repr) x b -> repr vid hi ho z c)
        -> repr vid hi ho z c
           
   -- no concurrency introduced
   recv :: (RegVar (Name repr) vid a -> repr (S vid) (Reg vid:hi) (Reg vid:ho) x b)
-       -> repr vid hi ho x (a :-> b)   
+       -> repr vid hi ho x (Lolli repr a b)   
 
           
   lSend :: (NotOrd hi w, NotOrd hi x)
         => Name repr hi hi2 w a
-        -> Name repr hi2 ho x (a :-<> b)
+        -> Name repr hi2 ho x (LLolli repr a b)
         -> (LinVar (Name repr) x b -> repr vid hi2 ho2 z c)
         -> repr vid hi ho2 z c
            
   lRecv :: (LinVar (Name repr) vid a -> repr (S vid) (Lin vid:hi)  (None:ho) x b)
-       -> repr vid hi ho x (a :-<> b)
+       -> repr vid hi ho x (LLolli repr a b)
 
           
   sSend :: Name repr hi hi2 w a -- This can use non-ordered variables, but if they are ordered,
-        -> Name repr hi2 ho x (a :>-> b) -- it ensures that they are in fact ordered, as they come with a type constraint ensuring they are used this way.
+        -> Name repr hi2 ho x (SLolli repr a b) -- it ensures that they are in fact ordered, as they come with a type constraint ensuring they are used this way.
         -- The abstraction reuses "x" so we don't need to increment the depth counter.
         -> (OrdVar (Name repr) x b -> repr vid hi2 ho2 z c) -- "ho2" is used instead of "ho" in the abstraction because it might use more variables from further up the scope.
         -> repr vid hi ho2 z c
 
   sRecv :: (OrdVar (Name repr) y a -> repr (S y) (Om y:hi) (None:ho) x b)
-        -> repr y hi ho x (a :>-> b)
+        -> repr y hi ho x (SLolli repr a b)
            
   eSend :: ConsumeOrdAsLin w hi ho2    -- this case is strange as we need to make sure we eat w in ho2 since we never see w there
-        => Name repr hi hi2 x (a :->> b)
+        => Name repr hi hi2 x (ELolli repr a b)
         -> Name repr hi2 ho w a
         -> (OrdVar (Name repr) x b -> repr vid hi ho2 z c)
         -> repr vid hi ho2 z c         
 
   eRecv :: (End hi (Om y) hi', End ho None ho')
         => (OrdVar (Name repr) y a -> repr (S y) hi' ho' x b)
-        -> repr y hi ho x (a :->> b)
+        -> repr y hi ho x (ELolli repr a b)
 
   bif :: ( PartCtx hi1 hi'  hi  -- bifurcate - "CUT"
          , PartCtx ho1 ho'  ho
@@ -195,94 +183,3 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
        -> repr vid hi ho z c
 
        
-newtype Ch (hi::[Cont]) (ho::[Cont]) (x::Nat) a = Ch { unCh :: Chan a }
-newtype C (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = C { unC :: (forall hi ho . Ch hi ho x a) -> IO () }
-
-newtype a :>-> b = SLolli {unSLolli :: (Chan a, Chan b) }
-newtype a :->> b = ELolli {unELolli :: (Chan a, Chan b) }
-newtype a :-<> b = LLolli {unLLolli :: (Chan a, Chan b) }
-newtype a :->  b = Lolli  {unLolli  :: (Chan a, Chan b) }
-
-
-instance Functor (C v hi ho x) where
-  -- yes this typechecks, but I'm not sure it is meaningful.
-  fmap f (C ca_io) = C $ \(Ch cb) -> do
-    ca <- newChan
-    forkIO $ do
-      al <- getChanContents ca
-      writeList2Chan cb $ f <$> al
-    ca_io $ Ch ca
-
-    
-  
-instance OrdSeq C where
-  type Name C = Ch
-
-  forward (Ch y) = C $ \(Ch x) -> do
-    xl <- getChanContents x
-    forkIO $ writeList2Chan y xl
-    return ()
-  
-  bif (C pa) qa_c = C $ \cc -> do
-    cw <- newChan
-    forkIO $ (unC $ qa_c $ Ch cw) cc
-    pa $ Ch cw
-
-
-  sRecv f = C $ \cab -> do
-    (ca,cb) <- unSLolli <$> readChan (unCh cab)
-    unC (f $ Ch ca) $ Ch cb
-    
-  sSend ca cab procB_C = C $ \cc -> do
-    cb <- newChan
-    writeChan (unCh cab) $ SLolli (unCh ca, cb)
-    unC (procB_C $ Ch cb) cc
-
-
-  eRecv f = C $ \cab -> do
-    (ca,cb) <- unELolli <$> readChan (unCh cab)
-    unC (f $ Ch ca) $ Ch cb
-
-  eSend cab ca procB_C = C $ \cc -> do
-    cb <- newChan
-    forkIO $ unC (procB_C $ Ch cb) cc
-    writeChan (unCh cab) $ ELolli (unCh ca, cb)    
-
-
-  lRecv f = C $ \cab -> do
-    (ca,cb) <- unLLolli <$> readChan (unCh cab)
-    unC (f $ Ch ca) $ Ch cb
-
-  lSend ca cab procB_C = C $ \cc -> do
-    cb <- newChan
-    forkIO $ unC (procB_C $ Ch cb) cc
-    writeChan (unCh cab) $ LLolli (unCh ca, cb)    
-
-
-  recv f = C $ \cab -> do
-    (ca,cb) <- unLolli <$> readChan (unCh cab)
-    unC (f $ Ch ca) $ Ch cb
-
-  send ca cab procB_C = C $ \cc -> do
-    cb <- newChan
-    writeChan (unCh cab) $ Lolli (unCh ca, cb)        
-    unC (procB_C $ Ch cb) cc
-
-
-evalC :: C Z '[] '[] chan a -> a -> IO ()
-evalC e a = do
-  c <- newChan
-  writeChan c a  
-  unC e $ Ch c
-
-tm :: (a :>-> b) :>-> (a :>-> b) -> IO ()
-tm = evalC $ sRecv $ \y -> sRecv $ \z -> sSend z y forward
-
-tm2 :: b :>-> b -> IO ()
-tm2 = evalC $ sRecv forward
-
-main = do
-  a <- newChan
-  b <- newChan
-  tm2 $ SLolli (a, b)
-  tm $ SLolli (a, b)

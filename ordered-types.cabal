@@ -1,0 +1,44 @@
+name:                ordered-types
+version:             0.0.0.0
+synopsis:            a concurrent dsl based on ordered types
+description:
+  A library for creading ordered typed DSLs, and a concurrent dsl to use it
+  .
+  See <http://github.com/mmirman/ordered-types> for more information.
+
+homepage:            http://github.com/mmirman/ordered-types
+license:             BSD3
+license-file:        LICENSE
+author:              Matthew Mirman
+maintainer:          mmirman@andrew.cmu.edu
+
+category:            Network, Web
+build-type:          Simple
+cabal-version:       >=1.8
+
+source-repository head
+  type:    git
+  location: git://github.com/mmirman/ordered-types.git
+
+library
+  exposed-modules:     DSL.OrderedLogic.OrderedTypes,
+                       DSL.OrderedLogic.ConcurrentSemantics
+  build-depends:       base < 6.0
+
+  hs-source-dirs:      .
+  
+  extensions:    DataKinds,
+                 FlexibleContexts,
+                 FlexibleInstances,
+                 FunctionalDependencies,
+                 KindSignatures,
+                 MultiParamTypeClasses,
+                 NoMonomorphismRestriction,
+                 RankNTypes,
+                 TypeFamilies,
+                 TypeOperators,
+                 UndecidableInstances,
+                 AllowAmbiguousTypes,
+                 GADTs,
+                 ScopedTypeVariables,
+                 GeneralizedNewtypeDeriving
