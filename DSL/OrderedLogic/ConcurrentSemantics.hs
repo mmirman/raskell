@@ -4,6 +4,8 @@ import DSL.OrderedLogic.OrderedTypes
 
 import Control.Applicative
 import Control.Concurrent
+import Control.Concurrent.Chan.Forwardable
+
 newtype Ch (hi::[Cont]) (ho::[Cont]) (x::Nat) a = Ch { unCh :: Chan a }
 newtype C (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = C { unC :: (forall hi ho . Ch hi ho x a) -> IO () }
 

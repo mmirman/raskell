@@ -23,7 +23,9 @@ source-repository head
 library
   exposed-modules:     DSL.OrderedLogic.OrderedTypes,
                        DSL.OrderedLogic.ConcurrentSemantics
-  build-depends:       base < 6.0
+                       Control.Concurrent.Chan.Forwardable
+  build-depends:       base < 6.0,
+                       unagi-chan
 
   hs-source-dirs:      .
   
