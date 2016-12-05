@@ -16,8 +16,7 @@
   ScopedTypeVariables,
   GeneralizedNewtypeDeriving
  #-}
-
-module OrderedConcurrent where
+module DSL.OrderedLogic.OrderedTypes where
 
 import Control.Applicative
 import Control.Concurrent
@@ -28,7 +27,6 @@ void x = x >> return ()
 -- Type level Nats
 --
 data Nat = Z | S Nat
-
 
 data Cont = Lin Nat | Om Nat | Reg Nat | None
 
@@ -183,7 +181,7 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
         => (OrdVar (Name repr) y a -> repr (S y) hi' ho' x b)
         -> repr y hi ho x (a :->> b)
 
-  par :: ( PartCtx hi1 hi'  hi
+  bif :: ( PartCtx hi1 hi'  hi  -- bifurcate - "CUT"
          , PartCtx ho1 ho'  ho
            
          , PartCtx hi2 hi3 hi'
@@ -225,7 +223,7 @@ instance OrdSeq C where
     forkIO $ writeList2Chan y xl
     return ()
   
-  par (C pa) qa_c = C $ \cc -> do
+  bif (C pa) qa_c = C $ \cc -> do
     cw <- newChan
     forkIO $ (unC $ qa_c $ Ch cw) cc
     pa $ Ch cw
