@@ -3,8 +3,10 @@ module DSL.OrderedLogic.ConcurrentSemantics where
 import DSL.OrderedLogic.OrderedTypes
 
 import Control.Applicative
-import Control.Concurrent
+import Control.Concurrent (forkIO)
 import Control.Concurrent.Chan.Forwardable
+import Debug.Trace
+
 
 newtype Ch (hi::[Cont]) (ho::[Cont]) (x::Nat) a = Ch { unCh :: Chan a }
 newtype C (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = C { unC :: (forall hi ho . Ch hi ho x a) -> IO () }
@@ -23,10 +25,7 @@ instance OrdSeq C where
   type LLolli C = (:-<>)
   type Lolli C = (:->)
 
-  forward (Ch y) = C $ \(Ch x) -> do
-    xl <- getChanContents x
-    forkIO $ writeList2Chan y xl
-    return ()
+  forward (Ch y) = C $ \(Ch x) -> forwardChan x y
   
   bif (C pa) qa_c = C $ \cc -> do
     cw <- newChan
@@ -77,11 +76,11 @@ instance OrdSeq C where
 evalC :: C Z '[] '[] chan a -> a -> IO ()
 evalC e a = do
   c <- newChan
-  writeChan c a  
+  writeChan c a
   unC e $ Ch c
 
 tm :: (a :>-> b) :>-> (a :>-> b) -> IO ()
-tm = evalC $ sRecv $ \y -> sRecv $ \z -> sSend z y forward
+tm = evalC $ sRecv $ \y -> sRecv $ \z -> sSend (trace "z" z) (trace "y" y) forward
 
 tm2 :: b :>-> b -> IO ()
 tm2 = evalC $ sRecv forward
@@ -89,5 +88,9 @@ tm2 = evalC $ sRecv forward
 main = do
   a <- newChan
   b <- newChan
+
   tm2 $ SLolli (a, b)
+  putStrLn "hi"  
   tm $ SLolli (a, b)
+
+

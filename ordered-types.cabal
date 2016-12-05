@@ -25,7 +25,7 @@ library
                        DSL.OrderedLogic.ConcurrentSemantics
                        Control.Concurrent.Chan.Forwardable
   build-depends:       base < 6.0,
-                       unagi-chan
+                       unagi-chan < 1.0
 
   hs-source-dirs:      .
   
