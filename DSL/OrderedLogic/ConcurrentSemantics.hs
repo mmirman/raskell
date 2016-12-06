@@ -82,7 +82,9 @@ evalC e a = do
 tm :: (a :>-> b) :>-> (a :>-> b) -> IO ()
 tm = evalC $ sRecv $ \y ->
   bif (sRecv $ \z -> sSend z y forward)
-  $ \z -> forward z
+  $ (\(z :: (OrdVar (Name C) (S Z) (a :>-> b))) ->
+      forward z :: C (S (S Z)) (Om (S Z):'[]) (None:'[]) t (a :>-> b)
+    )
   
 
 tm2 :: b :>-> b -> IO ()

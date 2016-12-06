@@ -168,25 +168,32 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
         => (OrdVar (Name repr) y a -> repr (S y) hi' ho' x b)
         -> repr y hi ho x (ELolli repr a b)
 
-  bif :: ( Swap hi hi2 (Om vid:'[]) hi13
-         , Swap ho ho2 (None:'[]) ho13
-         )
+  bif :: ( Swap hi ho hi2 ho2 (Om vid:'[]) (None:'[]) hi13 ho13 )
        => repr vid hi2 ho2 vid a  -- we use vid here to ensure the newness of "x"
        -> (OrdVar (Name repr) vid a -> repr (S vid) hi13 ho13 z c)
        -> repr vid hi ho z c
 
-class TriCtx (a::[Cont]) (m::[Cont]) (c::[Cont]) (d::[Cont])  | a m c -> d, m c d -> a, a c d -> m, a m d -> c
-instance ( PartCtxBoth a m i
-         , PartCtxBoth i c d
-         ) => TriCtx a m c d
+class SameLen (a::[Cont]) (b::[Cont])
+instance SameLen '[] '[]
+instance SameLen a b => SameLen (i:a) (j:b)
 
-class SwapPart (a::[Cont]) (x::[Cont]) (y::[Cont]) (b::[Cont])  | a x y -> b
-instance PartCtxBoth y a b => SwapPart a '[] y b
-instance SwapPart a x y b => SwapPart (h:a) (h:x) y b
-instance (EQC h h' bool, SwapPart a (h':x) y b) => SwapPart (h:a) (h':x) y (h:b)
+class SwapPart (a::[Cont]) (a'::[Cont]) (x::[Cont]) (x'::[Cont]) (y::[Cont]) (y'::[Cont]) (b::[Cont])  (b'::[Cont])
+--  | a x y -> b, a' x' y' -> b', a b x -> y, a' b' x' -> y'
+instance (SameLen a a', SameLen y y', SameLen b b', PartCtxBoth y a b, PartCtxBoth y' a' b')
+         => SwapPart a a' '[] '[] y y' b b'
+instance SwapPart a a' x x' y y' b b'
+         => SwapPart (h:a) (h':a') (h:x) (h':x') y y' b b'
+instance (EQC h h2 bool, EQC h' h2' bool, SwapPart a a' (h2:x) (h2':x') y y' b b' )
+         => SwapPart (h:a) (h':a') (h2:x) (h2':x') y y' (h:b) (h':b')
 
-class Swap (a::[Cont]) (x::[Cont]) (y::[Cont]) (b::[Cont])  | a x y -> b, b x y -> a
-instance (SwapPart a x y b, SwapPart b y x a) => Swap a x y b 
+class Swap (a::[Cont]) (a'::[Cont]) (x::[Cont]) (x'::[Cont]) (y::[Cont]) (y'::[Cont]) (b::[Cont])  (b'::[Cont])
+--   | a  x  y  -> b , b  x  y  -> a , a  b  x  -> y , a  b  y  -> x
+--   , a' x' y' -> b', b' x' y' -> a', a' b' x' -> y', a' b' y' -> x'
+instance (SwapPart a a' x x' y y' b b', SwapPart b b' y y' x x' a a') => Swap a a' x x' y y' b b'
+
+
+
+
 
 class ReverseHelp (a :: [Cont]) (t :: [Cont]) (b :: [Cont]) | a t -> b, a b -> t
 instance ReverseHelp '[] t t
@@ -198,6 +205,7 @@ instance (ReverseHelp a '[] b, ReverseHelp b '[] a)  => Reverse a b
 
 class PartCtx (a :: [Cont]) (b :: [Cont]) (c :: [Cont]) | a b -> c, c a -> b
 instance PartCtx '[] b b
+instance PartCtx a b c => PartCtx (None:a)  b (None:c)
 instance PartCtx a b c => PartCtx (Om h:a)  b (Om h:c)
 instance PartCtx a b c => PartCtx (Lin h:a) b (Lin h:c)
 instance PartCtx a b c => PartCtx (Reg h:a) b (Reg h:c)
