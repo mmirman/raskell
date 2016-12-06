@@ -25,7 +25,9 @@ instance OrdSeq C where
   type Lolli C = (:->)
 
   forward (Ch y) = C $ \(Ch x) -> forwardChan x y
-  
+
+  asOrd (Ch ch) f_ord = C $ unC $ f_ord $ Ch ch
+
   bif _ (C pa) qa_c = C $ \cc -> do
     cw <- newChan
     forkIO $ (unC $ qa_c $ Ch cw) cc

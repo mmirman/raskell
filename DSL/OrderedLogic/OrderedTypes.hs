@@ -100,7 +100,12 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
   recv :: (RegVar (Name repr) vid a -> repr (S vid) hi ho x b)
        -> repr vid hi ho x (Lolli repr a b)   
 
-  sSend :: ( ConsumeTog w x hi ho
+  asOrd :: Swap hi' ho' vid '[] '[] hi ho
+        => Name repr hi hi w a
+        -> (OrdVar (Name repr) vid a -> repr (S vid) hi' ho' z c) -- "ho2" is used instead of "ho" in the abstraction because it might use more variables from further up the scope.
+        -> repr vid hi ho z c
+
+  sSend :: ( FoundTog w x hi
            , ConsumeLin w hi hi'
            )
         => Name repr (Om w:'[]) (None:'[]) w a -- This can use non-ordered variables, but if they are ordered,
@@ -112,7 +117,7 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
   sRecv :: (OrdVar (Name repr) y a -> repr (S y) (Om y:hi) (None:ho) x b)
         -> repr y hi ho x (SLolli repr a b)
            
-  eSend :: ( ConsumeTog x w hi ho
+  eSend :: ( FoundTog x w hi
            , ConsumeLin w hi hi'
            )
         => Name repr (Om x:'[]) (None:'[]) x (ELolli repr a b)
@@ -130,10 +135,10 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
        -> (OrdVar (Name repr) vid a -> repr (S vid) hi13 ho13 z c)
        -> repr vid hi ho z c
 
-class ConsumeTog (w :: Nat) (x :: Nat) (hi :: [Cont]) (ho :: [Cont])
-instance {-# INCOHERENT #-} ConsumeTog w x (Om w:Om x:hi) (t:None:ho) -- don't necessarily want to consume w since it could be unordered
-instance {-# INCOHERENT #-} ConsumeTog w x hi ho => ConsumeTog w x (None:hi) (None:ho)
-instance {-# INCOHERENT #-} (EQ w z False, EQ x z False, ConsumeTog w x hi ho) => ConsumeTog w x (Om z:hi) (t:ho)
+class FoundTog (w :: Nat) (x :: Nat) (hi :: [Cont])
+instance {-# INCOHERENT #-} FoundTog w x (Om w:Om x:hi)
+instance {-# INCOHERENT #-} FoundTog w x hi => FoundTog w x (None:hi)
+instance {-# INCOHERENT #-} (EQ w z False, EQ x z False, FoundTog w x hi) => FoundTog w x (Om z:hi)
 
 
 class SameLen (a::[Cont]) (b::[Cont])
@@ -213,5 +218,3 @@ instance (Reverse c c', Reverse a a', Reverse b b', PartCtx b' a' c') => PartCtx
 
 class PartCtxBoth (a :: [Cont]) (b :: [Cont]) (c :: [Cont]) | a b -> c, b c -> a, a c -> b
 instance (PartCtxR a b c, PartCtx a b c) => PartCtxBoth a b c 
-
-
