@@ -206,7 +206,6 @@ instance ( EQ h h2 False
 
 class SwapFor (a::[Cont]) (a'::[Cont]) (x::Nat) (y::[Cont]) (y'::[Cont]) (b::[Cont])  (b'::[Cont])
     | a x b -> y
-    , a x y -> b
     , a x a' y' -> b'
     , a x a' b' -> y'
 instance ( SameLen a a', SameLen y y', SameLen b b'
@@ -220,6 +219,7 @@ instance ( EQ h h2 bool
 
 class SwapB (a::[Cont]) (x::Nat) (y::[Cont]) (b::[Cont])
     | a x y -> b
+    , a x b -> y
 instance PartCtxBoth y a b
       => SwapB (Om h:a) h y b
 instance ( EQ h h2 bool
