@@ -179,6 +179,8 @@ instance SameLen '[] '[]
 instance SameLen a b => SameLen (i:a) (j:b)
 
 class SwapPart (a::[Cont]) (a'::[Cont]) (x::[Cont]) (x'::[Cont]) (y::[Cont]) (y'::[Cont]) (b::[Cont])  (b'::[Cont])
+--  | a  x  y  -> b , a  b  x  -> y
+--  , a' x' y' -> b', a' b' x' -> y'
 instance (SameLen a a', SameLen y y', SameLen b b', PartCtxBoth y a b, PartCtxBoth y' a' b')
          => SwapPart a a' '[] '[] y y' b b'
 instance SwapPart a a' x x' y y' b b'
@@ -187,7 +189,10 @@ instance (EQC h h2 bool, EQC h' h2' bool, SwapPart a a' (h2:x) (h2':x') y y' b b
          => SwapPart (h:a) (h':a') (h2:x) (h2':x') y y' (h:b) (h':b')
 
 class Swap (a::[Cont]) (a'::[Cont]) (x::[Cont]) (x'::[Cont]) (y::[Cont]) (y'::[Cont]) (b::[Cont])  (b'::[Cont])
+--   | a  x  y  -> b , b  x  y  -> a , a  b  x  -> y , a  b  y  -> x
+--   , a' x' y' -> b', b' x' y' -> a', a' b' x' -> y', a' b' y' -> x'
 instance (SwapPart a a' x x' y y' b b', SwapPart b b' y y' x x' a a') => Swap a a' x x' y y' b b'
+
 
 
 
