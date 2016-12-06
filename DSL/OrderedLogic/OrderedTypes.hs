@@ -158,6 +158,9 @@ class SwapFor (a::[Cont]) (a'::[Cont]) (x::Nat) (y::[Cont]) (y'::[Cont]) (b::[Co
     | a x b -> y
     , a x a' y' -> b'
     , a x a' b' -> y'
+    , a x y -> b
+    , b x y -> a
+    , a b -> x y
 instance ( SameLen a a', SameLen y y', SameLen b b'
          , PartCtxBoth y a b
          , PartCtxBoth y' a' b'
@@ -166,17 +169,6 @@ instance ( SameLen a a', SameLen y y', SameLen b b'
 instance ( EQ h h2 bool
          , SwapFor a a' h2 y y' b b'
          ) => SwapFor (Om h:a) (h':a') h2 y y' (Om h:b) (h':b')
-
-class SwapB (a::[Cont]) (x::Nat) (y::[Cont]) (b::[Cont])
-    | a x y -> b
-    , a b -> x y
-instance PartCtxBoth y a b
-      => SwapB (Om h:a) h y b
-instance SwapB a h2 y b
-       => SwapB (None:a) h2 y (None:b)               
-instance ( EQ h h2 False
-         , SwapB a h2 y b
-         ) => SwapB (Om h:a) h2 y (Om h:b)
 
 class Prefix (p::[Cont]) (a::[Cont])  | a p -> 
 instance Prefix '[] a
@@ -215,7 +207,7 @@ class Swap (a::[Cont]) (a'::[Cont]) (x::Nat) (y::[Cont]) (y'::[Cont]) (b::[Cont]
     , a y b' -> x
     , a y' b -> x
     , a y' b' -> x
-instance (SwapB a x y b, SwapC b y x a, SwapRev a a' x y y' b b', SwapFor a a' x y y' b b') => Swap a a' x y y' b b'
+instance ( SwapC b y x a,  SwapRev a a' x y y' b b', SwapFor a a' x y y' b b') => Swap a a' x y y' b b'
 
 
 class ReverseHelp (a :: [Cont]) (t :: [Cont]) (b :: [Cont]) | a t -> b, a b -> t
