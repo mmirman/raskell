@@ -93,12 +93,18 @@ instance                     ConsumeRegHelper True  v x i (Reg x:i)
 instance ConsumeReg v i o => ConsumeRegHelper False v x i (Reg x:o)
 
 
-class End (l :: [Cont]) (v :: Cont) (l' :: [Cont]) | l v -> l'
-instance End '[] a (a:'[])
-instance End a v2 b => End (v:a) v2 (v:b)
+class EndH (l :: [Cont]) (v :: Cont) (l' :: [Cont]) | v l -> l'
+instance EndH '[] a (a:'[])
+instance EndH a v2 b => EndH (v:a) v2 (v:b)
 
--- PartCtx is a bit like concat, but regular variables must be treated differently
 
+class RemEnd (l :: [Cont])  (l' :: [Cont]) | l -> l'
+instance RemEnd (a:'[]) '[]
+instance RemEnd (v':a) b => RemEnd (v:v':a) (v:b)
+
+
+class End (l :: [Cont]) (v :: Cont) (l' :: [Cont]) | v l -> l', l' -> l
+instance (RemEnd l' l, EndH l v l') => End l v l'
 
 
 
@@ -168,7 +174,7 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
         => (OrdVar (Name repr) y a -> repr (S y) hi' ho' x b)
         -> repr y hi ho x (ELolli repr a b)
 
-  bif :: ( Swap hi ho hi2 ho2 (Om vid:'[]) (None:'[]) hi13 ho13 )
+  bif :: ( Swap hi13 ho13 vid hi2 ho2 hi ho )
        => Phant hi13
        -> repr vid hi2 ho2 vid a  -- we use vid here to ensure the newness of "x"
        -> (OrdVar (Name repr) vid a -> repr (S vid) hi13 ho13 z c)
@@ -178,23 +184,59 @@ class SameLen (a::[Cont]) (b::[Cont])
 instance SameLen '[] '[]
 instance SameLen a b => SameLen (i:a) (j:b)
 
-class SwapPart (a::[Cont]) (a'::[Cont]) (x::[Cont]) (x'::[Cont]) (y::[Cont]) (y'::[Cont]) (b::[Cont])  (b'::[Cont])
---  | a  x  y  -> b , a  b  x  -> y
---  , a' x' y' -> b', a' b' x' -> y'
-instance (SameLen a a', SameLen y y', SameLen b b', PartCtxBoth y a b, PartCtxBoth y' a' b')
-         => SwapPart a a' '[] '[] y y' b b'
-instance SwapPart a a' x x' y y' b b'
-         => SwapPart (h:a) (h':a') (h:x) (h':x') y y' b b'
-instance (EQC h h2 bool, EQC h' h2' bool, SwapPart a a' (h2:x) (h2':x') y y' b b' )
-         => SwapPart (h:a) (h':a') (h2:x) (h2':x') y y' (h:b) (h':b')
+class SwapRev (a::[Cont]) (a'::[Cont]) (x::Nat) (y::[Cont]) (y'::[Cont]) (b::[Cont])  (b'::[Cont])
+    | a x b -> y
+    , a x b' -> y'
+    , a y b -> x
+    , a y b' -> x
+    , a y' b -> x
+    , a y' b' -> x
+instance SwapRev (Om h: '[]) (None: '[]) h '[] '[] '[] '[]
+instance SwapRev (Om h: '[]) (None: '[]) h y y' b b'
+      => SwapRev (Om h:'[]) (None: '[]) h (v:y) (v':y') (v:b) (v':b')
+instance ( End y r y2
+         , End y' r' y2'
+         , SwapRev (Om h:a) (None:a') h y2 y2' b b'
+         )
+      => SwapRev (Om h:r:a) (None:r':a') h y y' b b'
+instance ( EQ h h2 False
+         , SwapRev a a' h2 y y' b b'
+         )
+         => SwapRev (Om h:a) (h':a') h2 y y' (Om h:b) (h':b')
 
-class Swap (a::[Cont]) (a'::[Cont]) (x::[Cont]) (x'::[Cont]) (y::[Cont]) (y'::[Cont]) (b::[Cont])  (b'::[Cont])
---   | a  x  y  -> b , b  x  y  -> a , a  b  x  -> y , a  b  y  -> x
---   , a' x' y' -> b', b' x' y' -> a', a' b' x' -> y', a' b' y' -> x'
-instance (SwapPart a a' x x' y y' b b', SwapPart b b' y y' x x' a a') => Swap a a' x x' y y' b b'
+class SwapFor (a::[Cont]) (a'::[Cont]) (x::Nat) (y::[Cont]) (y'::[Cont]) (b::[Cont])  (b'::[Cont])
+    | a x b -> y
+    , a x y -> b
+    , a x a' y' -> b'
+    , a x a' b' -> y'
+instance ( SameLen a a', SameLen y y', SameLen b b'
+         , PartCtxBoth y a b
+         , PartCtxBoth y' a' b'
+         )
+      => SwapFor (Om h:a) (h':a') h y y' b b'
+instance ( EQ h h2 bool
+         , SwapFor a a' h2 y y' b b'
+         ) => SwapFor (Om h:a) (h':a') h2 y y' (Om h:b) (h':b')
 
+class SwapB (a::[Cont]) (x::Nat) (y::[Cont]) (b::[Cont])
+    | a x y -> b
+instance PartCtxBoth y a b
+      => SwapB (Om h:a) h y b
+instance ( EQ h h2 bool
+         , SwapB a h2 y b
+         ) => SwapB (Om h:a) h2 y (Om h:b)
 
-
+class Swap (a::[Cont]) (a'::[Cont]) (x::Nat) (y::[Cont]) (y'::[Cont]) (b::[Cont])  (b'::[Cont])
+    | a x y -> b
+    , a x a' y' -> b'
+    , a x a' b' -> y'
+    , a x b -> y
+    , a x b' -> y'
+    , a y b -> x
+    , a y b' -> x
+    , a y' b -> x
+    , a y' b' -> x
+instance (SwapB a x y b, SwapRev a a' x y y' b b', SwapFor a a' x y y' b b') => Swap a a' x y y' b b'
 
 
 class ReverseHelp (a :: [Cont]) (t :: [Cont]) (b :: [Cont]) | a t -> b, a b -> t
