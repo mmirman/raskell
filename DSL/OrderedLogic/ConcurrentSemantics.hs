@@ -1,3 +1,4 @@
+{-# LANGUAGE PartialTypeSignatures #-}
 module DSL.OrderedLogic.ConcurrentSemantics where
 
 import DSL.OrderedLogic.OrderedTypes
@@ -27,7 +28,7 @@ instance OrdSeq C where
 
   forward (Ch y) = C $ \(Ch x) -> forwardChan x y
   
-  bif (C pa) qa_c = C $ \cc -> do
+  bif _ (C pa) qa_c = C $ \cc -> do
     cw <- newChan
     forkIO $ (unC $ qa_c $ Ch cw) cc
     pa $ Ch cw
@@ -81,10 +82,9 @@ evalC e a = do
 
 tm :: (a :>-> b) :>-> (a :>-> b) -> IO ()
 tm = evalC $ sRecv $ \y ->
-  bif (sRecv $ \z -> sSend z y forward)
-  $ (\(z :: (OrdVar (Name C) (S Z) (a :>-> b))) ->
-      forward z :: C (S (S Z)) (Om (S Z):'[]) (None:'[]) t (a :>-> b)
-    )
+  bif (P :: Phant (Om (S Z):'[]))
+    (sRecv $ \z -> sSend z y forward )
+  $ forward
   
 
 tm2 :: b :>-> b -> IO ()
