@@ -34,6 +34,24 @@ instance (ConsumeOrd v i o) => ConsumeOrd v (None:i) (None:o)
 instance ConsumeOrd x (Om x:i) (None:i)
 
 
+
+class ConsumeLin (v::Nat) (i::[Cont]) (o::[Cont]) | v i -> o
+class ConsumeLinHelper (b::Bool) (v::Nat) (x::Nat) (i::[Cont]) (o::[Cont]) | b v x i -> o
+
+instance ConsumeLin v i o                       => ConsumeLin v (None:i) (None:o)
+instance (EQ v x b, ConsumeLinHelper b v x i o) => ConsumeLin v (Om x: i) o
+instance                     ConsumeLinHelper True v x i (None:i)
+instance ConsumeLin v i o => ConsumeLinHelper False v x i (Om x:o)
+
+
+class ConsumeReg (v::Nat) (i::[Cont]) (o::[Cont])
+instance {-# INCOHERENT #-} ConsumeReg v '[] '[]
+instance {-# INCOHERENT #-} (ConsumeReg v i o) => ConsumeReg v (None:i) (None:o)
+instance {-# INCOHERENT #-} (EQ v w False, ConsumeReg v i o) => ConsumeReg v (Om w:i) (Om w:o)
+instance {-# INCOHERENT #-} ConsumeReg x (Om x:i) (None:i)
+instance {-# INCOHERENT #-} ConsumeReg x (Om x:i) (Om x:i)
+
+
 class ConsumeOrdAsLin (v::Nat) (i::[Cont]) (o::[Cont]) | v i -> o
 class ConsumeOrdAsLinHelperOrd (b::Bool) (v::Nat) (x::Nat) (i::[Cont]) (o::[Cont]) | b v x i -> o
 
@@ -58,7 +76,7 @@ class End (l :: [Cont]) (v :: Cont) (l' :: [Cont]) | v l -> l', l' -> l
 instance (RemEnd l' l, EndH l v l') => End l v l'
 
 type OrdVar repr vid a = forall (i::[Cont]) (o::[Cont]) . ConsumeOrd vid i o => repr i o vid a 
-type RegVar repr (vid :: Nat) a = forall (i::[Cont]) .repr i i vid a
+type RegVar repr (vid :: Nat) a = forall (i::[Cont]) (o :: [Cont]) . ConsumeReg vid i o => repr i o vid a
 
 data Phant (i :: [Cont]) = P
 
@@ -82,40 +100,25 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
   recv :: (RegVar (Name repr) vid a -> repr (S vid) hi ho x b)
        -> repr vid hi ho x (Lolli repr a b)   
 
-{-        
-  sSend :: Name repr hi hi2 w a -- This can use non-ordered variables, but if they are ordered,
-        -> Name repr hi2 ho x (SLolli repr a b) -- it ensures that they are in fact ordered, as they come with a type constraint ensuring they are used this way.
+  sSend :: ( ConsumeTog w x hi ho
+           , ConsumeLin w hi hi'
+           )
+        => Name repr (Om w:'[]) (None:'[]) w a -- This can use non-ordered variables, but if they are ordered,
+        -> Name repr (Om x:'[]) (None:'[]) x (SLolli repr a b) -- it ensures that they are in fact ordered, as they come with a type constraint ensuring they are used this way.
         -- The abstraction reuses "x" so we don't need to increment the depth counter.
-        -> (OrdVar (Name repr) x b -> repr vid hi2 ho2 z c) -- "ho2" is used instead of "ho" in the abstraction because it might use more variables from further up the scope.
-        -> repr vid hi ho2 z c
--}
+        -> (OrdVar (Name repr) x b -> repr vid hi' ho z c) -- "ho2" is used instead of "ho" in the abstraction because it might use more variables from further up the scope.
+        -> repr vid hi ho z c
 
-
-  sSend :: ( PartCtxBoth hi1 hi2  hi
-           , PartCtxBoth hi1 hi2' hi'
-           ) 
-        => Name repr hi2 hi2' w a -- This can use non-ordered variables, but if they are ordered,
-        -> Name repr hi2' ho x (SLolli repr a b) -- it ensures that they are in fact ordered, as they come with a type constraint ensuring they are used this way.
-        -- The abstraction reuses "x" so we don't need to increment the depth counter.
-        -> (OrdVar (Name repr) x b -> repr vid hi' ho2 z c) -- "ho2" is used instead of "ho" in the abstraction because it might use more variables from further up the scope.
-        -> repr vid hi ho2 z c
-
-{-
-  sSend :: ConsumeTog w x hi ho
-        => Name repr hi1 hi2 w a -- This can use non-ordered variables, but if they are ordered,
-        -> Name repr hi2 hi3 x (SLolli repr a b) -- it ensures that they are in fact ordered, as they come with a type constraint ensuring they are used this way.
-        -- The abstraction reuses "x" so we don't need to increment the depth counter.
-        -> (OrdVar (Name repr) x b -> repr vid hi ho z c) -- "ho2" is used instead of "ho" in the abstraction because it might use more variables from further up the scope.
-        -> repr vid hi ho2 z c
--}
   sRecv :: (OrdVar (Name repr) y a -> repr (S y) (Om y:hi) (None:ho) x b)
         -> repr y hi ho x (SLolli repr a b)
            
-  eSend :: ConsumeOrdAsLin w hi ho2    -- this case is strange as we need to make sure we eat w in ho2 since we never see w there
-        => Name repr hi hi2 x (ELolli repr a b)
-        -> Name repr hi2 ho w a
-        -> (OrdVar (Name repr) x b -> repr vid hi ho2 z c)
-        -> repr vid hi ho2 z c         
+  eSend :: ( ConsumeTog x w hi ho
+           , ConsumeLin w hi hi'
+           )
+        => Name repr (Om x:'[]) (None:'[]) x (ELolli repr a b)
+        -> Name repr (Om w:'[]) (None:'[]) w a
+        -> (OrdVar (Name repr) x b -> repr vid hi' ho z c)
+        -> repr vid hi ho z c
 
   eRecv :: (End hi (Om y) hi', End ho None ho')
         => (OrdVar (Name repr) y a -> repr (S y) hi' ho' x b)
@@ -127,8 +130,10 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
        -> (OrdVar (Name repr) vid a -> repr (S vid) hi13 ho13 z c)
        -> repr vid hi ho z c
 
---class ConsumeTog (w :: Nat) (x :: Nat) (hi :: [Cont]) (ho :: [Cont])
---instance ConsumeTog
+class ConsumeTog (w :: Nat) (x :: Nat) (hi :: [Cont]) (ho :: [Cont])
+instance {-# INCOHERENT #-} ConsumeTog w x (Om w:Om x:hi) (t:None:ho) -- don't necessarily want to consume w since it could be unordered
+instance {-# INCOHERENT #-} ConsumeTog w x hi ho => ConsumeTog w x (None:hi) (None:ho)
+instance {-# INCOHERENT #-} (EQ w z False, EQ x z False, ConsumeTog w x hi ho) => ConsumeTog w x (Om z:hi) (t:ho)
 
 
 class SameLen (a::[Cont]) (b::[Cont])
