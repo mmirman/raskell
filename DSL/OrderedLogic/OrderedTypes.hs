@@ -168,22 +168,8 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
         => (OrdVar (Name repr) y a -> repr (S y) hi' ho' x b)
         -> repr y hi ho x (ELolli repr a b)
 
-  bif :: ( {-PartCtxBoth hi1 hi'  hi  -- bifurcate - "CUT"
-         , PartCtxBoth ho1 ho'  ho
-           
-         , PartCtxBoth hi2 hi3 hi'
-         , PartCtxBoth ho2 ho3 ho'
-           
-         , PartCtxBoth hi1 (Om vid:hi3) hi13
-         , PartCtxBoth ho1 (None:ho3) ho13
-         -}  
-         {- TriCtx hi1 hi2 hi3 hi,
-          TriCtx ho1 ho2 ho3 ho,
-          PartCtxBoth hi1 (Om vid:hi3) hi13,
-          PartCtxBoth ho1 (None:ho3) ho13
-          -}
-          Swap hi hi2 (Om vid:'[]) hi13,
-          Swap ho ho2 (None:'[]) ho13
+  bif :: ( Swap hi hi2 (Om vid:'[]) hi13
+         , Swap ho ho2 (None:'[]) ho13
          )
        => repr vid hi2 ho2 vid a  -- we use vid here to ensure the newness of "x"
        -> (OrdVar (Name repr) vid a -> repr (S vid) hi13 ho13 z c)
@@ -194,13 +180,10 @@ instance ( PartCtxBoth a m i
          , PartCtxBoth i c d
          ) => TriCtx a m c d
 
-
-
-
 class SwapPart (a::[Cont]) (x::[Cont]) (y::[Cont]) (b::[Cont])  | a x y -> b
 instance PartCtxBoth y a b => SwapPart a '[] y b
 instance SwapPart a x y b => SwapPart (h:a) (h:x) y b
-instance (EQC h h' bool, SwapPart a (h':x) y b)=> SwapPart (h:a) (h':x) y (h:b)
+instance (EQC h h' bool, SwapPart a (h':x) y b) => SwapPart (h:a) (h':x) y (h:b)
 
 class Swap (a::[Cont]) (x::[Cont]) (y::[Cont]) (b::[Cont])  | a x y -> b, b x y -> a
 instance (SwapPart a x y b, SwapPart b y x a) => Swap a x y b 
