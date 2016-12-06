@@ -141,15 +141,15 @@ class SwapRev (a::[Cont]) (a'::[Cont]) (x::Nat) (y::[Cont]) (y'::[Cont]) (b::[Co
     , a y b' -> x
     , a y' b -> x
     , a y' b' -> x
-instance SwapRev (Om h: '[]) (None: '[]) h '[] '[] '[] '[]
-instance SwapRev (Om h: '[]) (None: '[]) h y y' b b'
+instance {-# INCOHERENT #-} SwapRev (Om h: '[]) (None: '[]) h '[] '[] '[] '[]
+instance {-# INCOHERENT #-} SwapRev (Om h: '[]) (None: '[]) h y y' b b'
       => SwapRev (Om h:'[]) (None: '[]) h (v:y) (v':y') (v:b) (v':b')
-instance ( End y r y2
+instance {-# INCOHERENT #-} ( End y r y2
          , End y' r' y2'
          , SwapRev (Om h:a) (None:a') h y2 y2' b b'
          )
       => SwapRev (Om h:r:a) (None:r':a') h y y' b b'
-instance ( EQ h h2 False
+instance  {-# INCOHERENT #-} ( EQ h h2 False
          , SwapRev a a' h2 y y' b b'
          )
          => SwapRev (Om h:a) (h':a') h2 y y' (Om h:b) (h':b')
@@ -161,29 +161,20 @@ class SwapFor (a::[Cont]) (a'::[Cont]) (x::Nat) (y::[Cont]) (y'::[Cont]) (b::[Co
     , a x y -> b
     , b x y -> a
     , a b -> x y
-instance ( SameLen a a', SameLen y y', SameLen b b'
+instance {-# INCOHERENT #-} ( SameLen a a', SameLen y y', SameLen b b'
          , PartCtxBoth y a b
          , PartCtxBoth y' a' b'
          )
       => SwapFor (Om h:a) (h':a') h y y' b b'
-instance ( EQ h h2 bool
+instance {-# INCOHERENT #-} ( EQ h h2 bool
          , SwapFor a a' h2 y y' b b'
          ) => SwapFor (Om h:a) (h':a') h2 y y' (Om h:b) (h':b')
 
 class Swap (a::[Cont]) (a'::[Cont]) (x::Nat) (y::[Cont]) (y'::[Cont]) (b::[Cont])  (b'::[Cont])
-    | a x y -> b
-    , b x y -> a
-    , a b -> x y
-    , a x a' y' -> b'
-    , a x a' b' -> y'
-    , a x b -> y
-    , a x b' -> y'
-    , a y b -> x
-    , a y b' -> x
-    , a y' b -> x
-    , a y' b' -> x
-instance (SwapRev a a' x y y' b b', SwapFor a a' x y y' b b') => Swap a a' x y y' b b'
 
+instance {-# INCOHERENT #-} (SwapRev a a' x y y' b b' , SwapFor a a' x y y' b b')
+         => Swap a a' x y y' b b'
+                                                              
 
 class ReverseHelp (a :: [Cont]) (t :: [Cont]) (b :: [Cont]) | a t -> b, a b -> t
 instance ReverseHelp '[] t t
