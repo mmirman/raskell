@@ -80,7 +80,10 @@ evalC e a = do
   unC e $ Ch c
 
 tm :: (a :>-> b) :>-> (a :>-> b) -> IO ()
-tm = evalC $ sRecv $ \y -> sRecv $ \z -> sSend (trace "z" z) (trace "y" y) forward
+tm = evalC $ sRecv $ \y ->
+  bif (sRecv $ \z -> sSend z y forward)
+  $ \z -> forward z
+  
 
 tm2 :: b :>-> b -> IO ()
 tm2 = evalC $ sRecv forward

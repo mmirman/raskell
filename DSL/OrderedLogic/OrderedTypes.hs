@@ -21,6 +21,11 @@ instance {-# OVERLAPPABLE #-} (b ~ False) => EQ x y b
 instance {-# OVERLAPPING #-} EQ x x True
 
 
+class EQC (x::Cont) (y::Cont) (b::Bool) | x y -> b
+instance {-# OVERLAPPABLE #-} (b ~ False) => EQC x y b
+instance {-# OVERLAPPING #-} EQC x x True
+
+
 class ConsumeOrdAsLin (v::Nat) (i::[Cont]) (o::[Cont]) | v i -> o
 class ConsumeOrdAsLinHelperOrd (b::Bool) (v::Nat) (x::Nat) (i::[Cont]) (o::[Cont]) | b v x i -> o
 class ConsumeOrdAsLinHelper (b::Bool) (v::Nat) (x::Nat) (i::[Cont]) (o::[Cont]) | b v x i -> o
@@ -93,12 +98,6 @@ instance End '[] a (a:'[])
 instance End a v2 b => End (v:a) v2 (v:b)
 
 -- PartCtx is a bit like concat, but regular variables must be treated differently
-class PartCtx (a :: [Cont]) (b :: [Cont]) (c :: [Cont]) | a b -> c, c a -> b
-instance PartCtx '[] b b
-instance PartCtx a b c => PartCtx (Om h:a) b (Om h:c)
-instance PartCtx a b c => PartCtx (Lin h:a) b (Lin h:c)
-instance PartCtx a b c => PartCtx (Reg h:a) b (Reg h:c)
-instance PartCtx a b c => PartCtx (Reg h:a) (Reg h:b) (Reg h:c)
 
 
 
@@ -169,17 +168,62 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
         => (OrdVar (Name repr) y a -> repr (S y) hi' ho' x b)
         -> repr y hi ho x (ELolli repr a b)
 
-  bif :: ( PartCtx hi1 hi'  hi  -- bifurcate - "CUT"
-         , PartCtx ho1 ho'  ho
+  bif :: ( {-PartCtxBoth hi1 hi'  hi  -- bifurcate - "CUT"
+         , PartCtxBoth ho1 ho'  ho
            
-         , PartCtx hi2 hi3 hi'
-         , PartCtx ho2 ho3 ho'
+         , PartCtxBoth hi2 hi3 hi'
+         , PartCtxBoth ho2 ho3 ho'
            
-         , PartCtx hi1 (Om vid:hi3) hi13
-         , PartCtx ho1 (None:ho3) ho13           
+         , PartCtxBoth hi1 (Om vid:hi3) hi13
+         , PartCtxBoth ho1 (None:ho3) ho13
+         -}  
+         {- TriCtx hi1 hi2 hi3 hi,
+          TriCtx ho1 ho2 ho3 ho,
+          PartCtxBoth hi1 (Om vid:hi3) hi13,
+          PartCtxBoth ho1 (None:ho3) ho13
+          -}
+          Swap hi hi2 (Om vid:'[]) hi13,
+          Swap ho ho2 (None:'[]) ho13
          )
        => repr vid hi2 ho2 vid a  -- we use vid here to ensure the newness of "x"
        -> (OrdVar (Name repr) vid a -> repr (S vid) hi13 ho13 z c)
        -> repr vid hi ho z c
 
-       
+class TriCtx (a::[Cont]) (m::[Cont]) (c::[Cont]) (d::[Cont])  | a m c -> d, m c d -> a, a c d -> m, a m d -> c
+instance ( PartCtxBoth a m i
+         , PartCtxBoth i c d
+         ) => TriCtx a m c d
+
+
+
+
+class SwapPart (a::[Cont]) (x::[Cont]) (y::[Cont]) (b::[Cont])  | a x y -> b
+instance PartCtxBoth y a b => SwapPart a '[] y b
+instance SwapPart a x y b => SwapPart (h:a) (h:x) y b
+instance (EQC h h' bool, SwapPart a (h':x) y b)=> SwapPart (h:a) (h':x) y (h:b)
+
+class Swap (a::[Cont]) (x::[Cont]) (y::[Cont]) (b::[Cont])  | a x y -> b, b x y -> a
+instance (SwapPart a x y b, SwapPart b y x a) => Swap a x y b 
+
+class ReverseHelp (a :: [Cont]) (t :: [Cont]) (b :: [Cont]) | a t -> b, a b -> t
+instance ReverseHelp '[] t t
+instance ReverseHelp h (a:t) b => ReverseHelp (a:h) t b
+
+class Reverse (a :: [Cont]) (b :: [Cont]) | a -> b, b -> a
+instance (ReverseHelp a '[] b, ReverseHelp b '[] a)  => Reverse a b
+
+
+class PartCtx (a :: [Cont]) (b :: [Cont]) (c :: [Cont]) | a b -> c, c a -> b
+instance PartCtx '[] b b
+instance PartCtx a b c => PartCtx (Om h:a)  b (Om h:c)
+instance PartCtx a b c => PartCtx (Lin h:a) b (Lin h:c)
+instance PartCtx a b c => PartCtx (Reg h:a) b (Reg h:c)
+instance PartCtx a b c => PartCtx (Reg h:a) (Reg h:b) (Reg h:c)
+
+class PartCtxR (a :: [Cont]) (b :: [Cont]) (c :: [Cont]) | a b -> c, b c -> a
+instance (Reverse c c', Reverse a a', Reverse b b', PartCtx b' a' c') => PartCtxR a b c 
+
+class PartCtxBoth (a :: [Cont]) (b :: [Cont]) (c :: [Cont]) | a b -> c, b c -> a, a c -> b
+instance (PartCtxR a b c, PartCtx a b c) => PartCtxBoth a b c 
+
+
