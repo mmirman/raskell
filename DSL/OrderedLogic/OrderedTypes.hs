@@ -21,11 +21,6 @@ instance {-# OVERLAPPABLE #-} (b ~ False) => EQ x y b
 instance {-# OVERLAPPING #-} EQ x x True
 
 
-class EQC (x::Cont) (y::Cont) (b::Bool) | x y -> b
-instance {-# OVERLAPPABLE #-} (b ~ False) => EQC x y b
-instance {-# OVERLAPPING #-} EQC x x True
-
-
 --
 -- Type level machinery for consuming a variable in a list of variables.
 --
@@ -50,16 +45,6 @@ instance {-# INCOHERENT #-} (ConsumeReg v i o) => ConsumeReg v (None:i) (None:o)
 instance {-# INCOHERENT #-} (EQ v w False, ConsumeReg v i o) => ConsumeReg v (Om w:i) (Om w:o)
 instance {-# INCOHERENT #-} ConsumeReg x (Om x:i) (None:i)
 instance {-# INCOHERENT #-} ConsumeReg x (Om x:i) (Om x:i)
-
-
-class ConsumeOrdAsLin (v::Nat) (i::[Cont]) (o::[Cont]) | v i -> o
-class ConsumeOrdAsLinHelperOrd (b::Bool) (v::Nat) (x::Nat) (i::[Cont]) (o::[Cont]) | b v x i -> o
-
-instance ConsumeOrdAsLin v i o                          => ConsumeOrdAsLin v (None:i) (None:o)
-instance (EQ v x b, ConsumeOrdAsLinHelperOrd b v x i o) => ConsumeOrdAsLin v (Om x: i)  o
-
-instance                          ConsumeOrdAsLinHelperOrd True  v x i (None:i)
-instance ConsumeOrdAsLin v i o => ConsumeOrdAsLinHelperOrd False v x i (Om x:o)
 
 
 
