@@ -135,12 +135,12 @@ instance SameLen '[] '[]
 instance SameLen a b => SameLen (i:a) (j:b)
 
 class SwapRev (a::[Cont]) (a'::[Cont]) (x::Nat) (y::[Cont]) (y'::[Cont]) (b::[Cont])  (b'::[Cont])
-    | a x b -> y
+{-    | a x b -> y
     , a x b' -> y'
     , a y b -> x
     , a y b' -> x
     , a y' b -> x
-    , a y' b' -> x
+    , a y' b' -> x -}
 instance {-# INCOHERENT #-} SwapRev (Om h: '[]) (None: '[]) h '[] '[] '[] '[]
 instance {-# INCOHERENT #-} SwapRev (Om h: '[]) (None: '[]) h y y' b b'
       => SwapRev (Om h:'[]) (None: '[]) h (v:y) (v':y') (v:b) (v':b')
@@ -154,26 +154,36 @@ instance  {-# INCOHERENT #-} ( EQ h h2 False
          )
          => SwapRev (Om h:a) (h':a') h2 y y' (Om h:b) (h':b')
 
-class SwapFor (a::[Cont]) (a'::[Cont]) (x::Nat) (y::[Cont]) (y'::[Cont]) (b::[Cont])  (b'::[Cont])
-    | a x b -> y
-    , a x a' y' -> b'
-    , a x a' b' -> y'
-    , a x y -> b
+class Prefix (p::[Cont]) (a::[Cont])
+instance {-# INCOHERENT #-} Prefix '[] a
+instance {-# INCOHERENT #-} Prefix p a => Prefix (h:p) (h:a)
+
+class NonPrefix (p::[Cont]) (x::[Cont])
+instance {-# INCOHERENT #-} NonPrefix (Om x:p) (None:b)
+instance {-# INCOHERENT #-} NonPrefix (None:p) (Om x:b)
+instance {-# INCOHERENT #-} EQ x y False => NonPrefix (Om x:p) (Om y:b)
+instance {-# INCOHERENT #-} NonPrefix p x => NonPrefix (h:p) (h:x)
+
+
+class SwapC (a::[Cont]) (x::[Cont]) (y::Nat) (b::[Cont])
+    | a b -> x y
     , b x y -> a
-    , a b -> x y
-instance {-# INCOHERENT #-} ( SameLen a a', SameLen y y', SameLen b b'
-         , PartCtxBoth y a b
-         , PartCtxBoth y' a' b'
+    , a x y -> b
+instance {-# INCOHERENT #-}
+         ( PartCtxBoth x b a
+         , Prefix x a
          )
-      => SwapFor (Om h:a) (h':a') h y y' b b'
-instance {-# INCOHERENT #-} ( EQ h h2 bool
-         , SwapFor a a' h2 y y' b b'
-         ) => SwapFor (Om h:a) (h':a') h2 y y' (Om h:b) (h':b')
+       => SwapC a x h (Om h:b)
+instance {-# INCOHERENT #-}
+         ( SwapC a x h2 b
+         , NonPrefix x (s:a)
+         , EQC s (Om h2) False
+         ) => SwapC (s:a) x h2 (s:b)
 
 class Swap (a::[Cont]) (a'::[Cont]) (x::Nat) (y::[Cont]) (y'::[Cont]) (b::[Cont])  (b'::[Cont])
 
-instance {-# INCOHERENT #-} (SwapRev a a' x y y' b b' , SwapFor a a' x y y' b b')
-         => Swap a a' x y y' b b'
+instance {-# INCOHERENT #-} (SwapC b y x a, SwapRev a a' x y y' b b' {- , SwapFor a a' x y y' b b' -})
+                            => Swap a a' x y y' b b'
                                                               
 
 class ReverseHelp (a :: [Cont]) (t :: [Cont]) (b :: [Cont]) | a t -> b, a b -> t
