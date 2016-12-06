@@ -71,7 +71,7 @@ evalC e a = do
 
 tm :: (a :>-> b) :>-> (a :>-> b) -> IO ()
 tm = evalC $ sRecv $ \y ->
-  bif (P :: Phant (Om (S Z):'[]))
+  bif P -- (P :: Phant (Om (S Z):'[]))
     (sRecv $ \z -> sSend z y forward)
   $ forward
   
