@@ -15,7 +15,6 @@ newtype C (vid::Nat) (hi::[Cont]) (ho::[Cont]) (x :: Nat) a = C { unC :: (forall
 
 newtype a :>-> b = SLolli {unSLolli :: (Chan a, Chan b) }
 newtype a :->> b = ELolli {unELolli :: (Chan a, Chan b) }
-newtype a :-<> b = LLolli {unLLolli :: (Chan a, Chan b) }
 newtype a :->  b = Lolli  {unLolli  :: (Chan a, Chan b) }
   
 instance OrdSeq C where
@@ -23,7 +22,6 @@ instance OrdSeq C where
 
   type SLolli C = (:>->)
   type ELolli C = (:->>)  
-  type LLolli C = (:-<>)
   type Lolli C = (:->)
 
   forward (Ch y) = C $ \(Ch x) -> forwardChan x y
@@ -52,17 +50,6 @@ instance OrdSeq C where
     cb <- newChan
     forkIO $ unC (procB_C $ Ch cb) cc
     writeChan (unCh cab) $ ELolli (unCh ca, cb)    
-
-
-  lRecv f = C $ \cab -> do
-    (ca,cb) <- unLLolli <$> readChan (unCh cab)
-    unC (f $ Ch ca) $ Ch cb
-
-  lSend ca cab procB_C = C $ \cc -> do
-    cb <- newChan
-    forkIO $ unC (procB_C $ Ch cb) cc
-    writeChan (unCh cab) $ LLolli (unCh ca, cb)    
-
 
   recv f = C $ \cab -> do
     (ca,cb) <- unLolli <$> readChan (unCh cab)
