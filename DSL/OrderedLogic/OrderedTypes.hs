@@ -170,31 +170,6 @@ instance ( EQ h h2 bool
          , SwapFor a a' h2 y y' b b'
          ) => SwapFor (Om h:a) (h':a') h2 y y' (Om h:b) (h':b')
 
-class Prefix (p::[Cont]) (a::[Cont])  | a p -> 
-instance Prefix '[] a
-instance Prefix p a => Prefix (h:p) (h:a)
-
-class NonPrefix (p::[Cont]) (x::[Cont]) | p x ->
-instance NonPrefix (Om x:p) (None:b)
-instance NonPrefix (None:p) (Om x:b)
-instance EQ x y False => NonPrefix (Om x:p) (Om y:b)
-instance NonPrefix p x => NonPrefix (h:p) (h:x)
-
-
-class SwapC (a::[Cont]) (x::[Cont]) (y::Nat) (b::[Cont])
-    | a x y -> b
-    , a b -> x y
-    , b x y -> a
-instance ( PartCtxBoth x b a
-         , Prefix x a
-         )
-       => SwapC a x h (Om h:b)
-instance ( SwapC a x h2 b
-         , NonPrefix x (s:a)
-         , EQC s (Om h2) False
-         ) => SwapC (s:a) x h2 (s:b)
-
-
 class Swap (a::[Cont]) (a'::[Cont]) (x::Nat) (y::[Cont]) (y'::[Cont]) (b::[Cont])  (b'::[Cont])
     | a x y -> b
     , b x y -> a
@@ -207,7 +182,7 @@ class Swap (a::[Cont]) (a'::[Cont]) (x::Nat) (y::[Cont]) (y'::[Cont]) (b::[Cont]
     , a y b' -> x
     , a y' b -> x
     , a y' b' -> x
-instance ( SwapC b y x a,  SwapRev a a' x y y' b b', SwapFor a a' x y y' b b') => Swap a a' x y y' b b'
+instance (SwapRev a a' x y y' b b', SwapFor a a' x y y' b b') => Swap a a' x y y' b b'
 
 
 class ReverseHelp (a :: [Cont]) (t :: [Cont]) (b :: [Cont]) | a t -> b, a b -> t
