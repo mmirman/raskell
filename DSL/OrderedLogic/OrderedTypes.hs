@@ -1,3 +1,4 @@
+{-# LANGUAGE IncoherentInstances #-}
 module DSL.OrderedLogic.OrderedTypes where
 
 import Control.Applicative
@@ -17,38 +18,44 @@ data Cont = Om Nat | None
 -- Type level Nat equality
 --
 class EQ (x::Nat) (y::Nat) (b::Bool) | x y -> b
-instance {-# OVERLAPPABLE #-} (b ~ False) => EQ x y b
-instance {-# OVERLAPPING #-} EQ x x True
+instance {-# OVERLAPS #-} (b ~ False) => EQ x y b
+instance {-# OVERLAPS #-} EQ x x True
 
 class EQC (x::Cont) (y::Cont) (b::Bool) | x y -> b
-instance {-# OVERLAPPABLE #-} (b ~ False) => EQC x y b
-instance {-# OVERLAPPING #-} EQC x x True
+instance {-# OVERLAPS #-} (b ~ False) => EQC x y b
+instance {-# OVERLAPS #-} EQC x x True
 
 
---
--- Type level machinery for consuming a variable in a list of variables.
---
-class ConsumeOrd (v::Nat) (i::[Cont]) (o::[Cont]) | v i -> o
+
+class ConsumeOrd (v::Nat) (i::[Cont]) (o::[Cont]) | v i -> o, o i -> v
 instance (ConsumeOrd v i o) => ConsumeOrd v (None:i) (None:o)
 instance ConsumeOrd x (Om x:i) (None:i)
 
+class ConsumeLin (v::Nat) (i::[Cont]) (o::[Cont]) | v i -> o, o i -> v
+class ConsumeLin'' (v::Nat) (i::[Cont]) (o::[Cont]) | o i -> v
+class ConsumeLin' (v::Nat) (i::[Cont]) (o::[Cont]) | v i -> o
+class ConsumeLinHelper (b::Bool) (v::Nat) (x::Nat) (i::[Cont]) (o::[Cont]) | b v x i -> o, b x o i -> v
 
+instance (ConsumeLin' v i o, ConsumeLin'' v i o )  => ConsumeLin v i o
 
-class ConsumeLin (v::Nat) (i::[Cont]) (o::[Cont]) | v i -> o
-class ConsumeLinHelper (b::Bool) (v::Nat) (x::Nat) (i::[Cont]) (o::[Cont]) | b v x i -> o
+instance ConsumeLin'' v i o => ConsumeLin'' v (None:i) (None:o)
+instance ConsumeLin'' x (Om x:i) (None:i)
+instance (EQ v y False, ConsumeLin'' v i o) => ConsumeLin'' v (Om y:i) (Om y:o)
 
-instance ConsumeLin v i o                       => ConsumeLin v (None:i) (None:o)
-instance (EQ v x b, ConsumeLinHelper b v x i o) => ConsumeLin v (Om x: i) o
-instance                     ConsumeLinHelper True v x i (None:i)
+instance ConsumeLin v i o                      => ConsumeLin' v (None:i) (None:o)
+instance (EQ v x b, ConsumeLinHelper b v x i o) => ConsumeLin' v (Om x: i) o
+instance                     ConsumeLinHelper True v v i (None:i)
 instance ConsumeLin v i o => ConsumeLinHelper False v x i (Om x:o)
 
 
+
+
 class ConsumeReg (v::Nat) (i::[Cont]) (o::[Cont])
-instance {-# INCOHERENT #-} ConsumeReg v '[] '[]
-instance {-# INCOHERENT #-} (ConsumeReg v i o) => ConsumeReg v (None:i) (None:o)
-instance {-# INCOHERENT #-} (EQ v w False, ConsumeReg v i o) => ConsumeReg v (Om w:i) (Om w:o)
-instance {-# INCOHERENT #-} ConsumeReg x (Om x:i) (None:i)
-instance {-# INCOHERENT #-} ConsumeReg x (Om x:i) (Om x:i)
+instance ConsumeReg v '[] '[]
+instance (ConsumeReg v i o) => ConsumeReg v (None:i) (None:o)
+instance (EQ v w False, ConsumeReg v i o) => ConsumeReg v (Om w:i) (Om w:o)
+instance ConsumeReg x (Om x:i) (None:i)
+instance ConsumeReg x (Om x:i) (Om x:i)
 
 
 
@@ -124,10 +131,10 @@ class OrdSeq (repr :: Nat -> [Cont] -> [Cont] -> Nat -> * -> *) where
        -> (OrdVar (Name repr) vid a -> repr (S vid) hi13 ho13 z c)
        -> repr vid hi ho z c
 
-class FoundTog (w :: Nat) (x :: Nat) (hi :: [Cont])
-instance {-# INCOHERENT #-} FoundTog w x (Om w:Om x:hi)
-instance {-# INCOHERENT #-} FoundTog w x hi => FoundTog w x (None:hi)
-instance {-# INCOHERENT #-} (EQ w z False, EQ x z False, FoundTog w x hi) => FoundTog w x (Om z:hi)
+class FoundTog (w :: Nat) (x :: Nat) (hi :: [Cont]) | hi -> w x
+instance FoundTog w x (Om w:Om x:hi)
+instance FoundTog w x hi => FoundTog w x (None:hi)
+instance (EQ w z False, EQ x z False, FoundTog w x hi) => FoundTog w x (Om z:hi)
 
 
 class SameLen (a::[Cont]) (b::[Cont])
@@ -140,49 +147,48 @@ class SwapRev (a::[Cont]) (a'::[Cont]) (x::Nat) (y::[Cont]) (y'::[Cont]) (b::[Co
     , a y' b -> x
     , a y' b' -> x
     , a b -> x y
-instance {-# INCOHERENT #-} SwapRev (Om h: '[]) (None: '[]) h '[] '[] '[] '[]
-instance {-# INCOHERENT #-} SwapRev (Om h: '[]) (None: '[]) h y y' b b'
+instance SwapRev (Om h: '[]) (None: '[]) h '[] '[] '[] '[]
+instance SwapRev (Om h: '[]) (None: '[]) h y y' b b'
       => SwapRev (Om h:'[]) (None: '[]) h (v:y) (v':y') (v:b) (v':b')
-instance {-# INCOHERENT #-} ( End y r y2
+instance ( End y r y2
          , End y' r' y2'
          , SwapRev (Om h:a) (None:a') h y2 y2' b b'
          )
       => SwapRev (Om h:r:a) (None:r':a') h y y' b b'
-instance  {-# INCOHERENT #-} ( EQ h h2 False
+instance  ( EQ h h2 False
          , SwapRev a a' h2 y y' b b'
          )
          => SwapRev (Om h:a) (h':a') h2 y y' (Om h:b) (h':b')
 
 class Prefix (p::[Cont]) (a::[Cont])
-instance {-# INCOHERENT #-} Prefix '[] a
-instance {-# INCOHERENT #-} Prefix p a => Prefix (h:p) (h:a)
+instance Prefix '[] a
+instance Prefix p a => Prefix (h:p) (h:a)
 
 class NonPrefix (p::[Cont]) (x::[Cont])
-instance {-# INCOHERENT #-} NonPrefix (Om x:p) (None:b)
-instance {-# INCOHERENT #-} NonPrefix (None:p) (Om x:b)
-instance {-# INCOHERENT #-} EQ x y False => NonPrefix (Om x:p) (Om y:b)
-instance {-# INCOHERENT #-} NonPrefix p x => NonPrefix (h:p) (h:x)
+instance NonPrefix (Om x:p) (None:b)
+instance NonPrefix (None:p) (Om x:b)
+instance EQ x y False => NonPrefix (Om x:p) (Om y:b)
+instance NonPrefix p x => NonPrefix (h:p) (h:x)
 
 
 class SwapC (a::[Cont]) (x::[Cont]) (y::Nat) (b::[Cont])
     | a b -> x y
     , a x y -> b
     , b x y -> a
-instance {-# INCOHERENT #-}
-         ( PartCtxBoth x b a
-         , Prefix x a
-         )
-       => SwapC a x h (Om h:b)
-instance {-# INCOHERENT #-}
+instance {-# OVERLAPS #-}
          ( SwapC a x h2 b
          , NonPrefix x (s:a)
          , EQC s (Om h2) False
          ) => SwapC (s:a) x h2 (s:b)
-
+instance {-# OVERLAPS #-}
+         ( PartCtxBoth x b a
+         , Prefix x a
+         )
+       => SwapC a x h (Om h:b)
+         
 class Swap (a::[Cont]) (a'::[Cont]) (x::Nat) (y::[Cont]) (y'::[Cont]) (b::[Cont])  (b'::[Cont])
 
-instance {-# INCOHERENT #-} (SwapC b y x a, SwapRev a a' x y y' b b')
-                            => Swap a a' x y y' b b'
+instance (SwapC b y x a, SwapRev a a' x y y' b b') => Swap a a' x y y' b b'
                                                               
 
 class ReverseHelp (a :: [Cont]) (t :: [Cont]) (b :: [Cont]) | a t -> b, a b -> t
